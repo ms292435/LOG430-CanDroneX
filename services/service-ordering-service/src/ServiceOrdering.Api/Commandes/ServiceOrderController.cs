@@ -8,6 +8,7 @@ namespace ServiceOrdering.Api.Commandes;
 /// <summary>Adaptateur d'entrée REST de l'API service-ordering (TMF641), exposée par la passerelle.</summary>
 [ApiController]
 [Route("api/service-ordering/v1/serviceOrder")]
+[Tags("Commandes (UC-04, TMF641)")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 public sealed class ServiceOrderController : ControllerBase

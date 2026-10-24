@@ -8,6 +8,7 @@ namespace DroneManagement.Api.Drones;
 /// <summary>Adaptateur d'entrée REST de l'API drone-management, exposée par la passerelle.</summary>
 [ApiController]
 [Route("api/drone-management/v1/drone")]
+[Tags("Drones (UC-02)")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 public sealed class DroneController : ControllerBase
@@ -75,7 +76,7 @@ public sealed class DroneController : ControllerBase
     /// </summary>
     /// <response code="404">Drone inexistant ou appartenant à un autre client, sans distinction.</response>
     [HttpGet("{droneId:guid}/identiteReseau")]
-    [Tags("Interne (non exposé par la passerelle)")]
+    [Tags("Identité réseau (UC-06) — interne, non exposée par la passerelle")]
     [ProducesResponseType(typeof(IdentiteReseauReponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IdentiteReseauReponse>> ResoudreIdentiteReseau(Guid droneId, CancellationToken ct)

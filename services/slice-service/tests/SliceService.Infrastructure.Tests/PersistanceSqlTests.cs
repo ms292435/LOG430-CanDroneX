@@ -125,7 +125,7 @@ public sealed class PersistanceSqlTests : IAsyncLifetime
 
         var ids = await _depot.ListerNonTermineesAsync();
 
-        Assert.Equal([recue.Id, enCours.Id], ids.Order());
+        Assert.Equal(new HashSet<Guid> { recue.Id, enCours.Id }, ids.ToHashSet());
     }
 
     [Fact]

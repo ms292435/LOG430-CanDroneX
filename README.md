@@ -2,7 +2,7 @@
 
 Plateforme B2B de slices réseau 5G pour drones (LOG430, ETS, automne 2026). La Phase 2 fait évoluer le monolithe modulaire de la Phase 1 (branche `phase1`) vers des microservices exposés par une API Gateway et protégés par le Keycloak fourni.
 
-> État : UC-02, UC-04 et UC-06 fonctionnent de bout en bout dans trois microservices derrière la passerelle. Restent à livrer : contrats OpenAPI exportés et Swagger UI, tests de charge, rapport. Les décisions d'architecture sont consignées dans [docs/decisions-phase2.md](docs/decisions-phase2.md).
+> État : UC-02, UC-04 et UC-06 fonctionnent de bout en bout dans trois microservices derrière la passerelle ; contrats OpenAPI et cas attendus en place. Restent à livrer : tests de charge, rapport. Les décisions d'architecture sont consignées dans [docs/decisions-phase2.md](docs/decisions-phase2.md).
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Client B2B ──(client credentials)──► Keycloak :8081  ──► JWT (az
 
 Chaque service revalide le jeton et filtre les données par client (claim `azp`). slice-service accepte la demande d'activation (202), puis la traite en arrière-plan : appel au réseau simulé, puis mise à jour de la demande et de l'inventaire.
 
-Seuls la passerelle (8080) et Keycloak (8081) sont publiés sur l'hôte.
+Seuls la passerelle (8080), Keycloak (8081) et la documentation Swagger UI (8082) sont publiés sur l'hôte.
 
 ## Prérequis
 
@@ -38,6 +38,34 @@ docker compose ps           # attendre que keycloak soit « healthy »
 docker compose down         # arrêter (les données sont conservées)
 docker compose down -v      # arrêter et réinitialiser les bases (données de démonstration rechargées au prochain démarrage)
 ```
+
+## Contrats d'API (OpenAPI) et Swagger UI
+
+Les contrats sont dans [docs/openapi](docs/openapi) et consultables sur **http://localhost:8082** une fois le système démarré :
+
+| Contrat | Contenu |
+|---|---|
+| [api-gateway.yaml](docs/openapi/api-gateway.yaml) | Contrat public : les routes exposées par KrakenD, sécurité `oauth2` (flux `clientCredentials`, URL du jeton du Keycloak fourni) |
+| [drone-management-service.yaml](docs/openapi/drone-management-service.yaml) | Drones (UC-02) et route interne d'identité réseau |
+| [service-ordering-service.yaml](docs/openapi/service-ordering-service.yaml) | Catalogue (TMF633) et commandes (UC-04, TMF641) |
+| [slice-service.yaml](docs/openapi/slice-service.yaml) | Inventaire (TMF638) et route interne d'activation (UC-06, TMF640) |
+
+Ils sont **générés depuis le code** et ne peuvent pas dériver : les tests `ContratOpenApiTests` échouent si un contrat de service ne correspond plus à l'API exposée, et `tests/Contrats.Tests` vérifie que le contrat de la passerelle correspond à `krakend/krakend.json` (aucune route interne exposée, toute route publique routée, jeton validé et transmis sur chaque route). Après une modification de l'API :
+
+```bash
+./scripts/exporter-contrats.sh
+```
+
+Dans Swagger UI, « Try it out » appelle la passerelle (variable de serveur `port` : la valeur de `GATEWAY_PORT`). Pour s'authentifier, coller un jeton obtenu avec curl dans le schéma **bearer** (bouton Authorize) : le Keycloak fourni n'autorise pas les appels de jeton depuis un navigateur (pas d'en-tête CORS sur la réponse), et sa configuration ne fait pas partie du livrable.
+
+## Cas attendus
+
+```bash
+./scripts/tester-cas-attendus.sh               # environ 1 min ; redémarre slice-service pour le cas « taux d'échec 100 % »
+SANS_ECHEC=1 ./scripts/tester-cas-attendus.sh  # sans ce cas
+```
+
+Le script vérifie, par la passerelle : jetons absents, modifiés, non signés, illisibles, d'un autre émetteur, sans audience et expirés (401) ; isolation entre clients (404, `X-Client-Id` forgé ignoré) ; UC-04 puis UC-06 jusqu'à l'état actif ; idempotence (rejeu, conflit, aucune association en double) ; format d'erreur RFC 9457 ; routes internes et microservices non exposés ; corrélation dans les journaux ; CORS ; pannes de drone-management-service et de slice-service ; activation en échec.
 
 ## Scénario de bout en bout (UC-02 → UC-04 → UC-06)
 
@@ -107,7 +135,7 @@ Le jeton dure 5 minutes. Données de démonstration (`services/drone-management-
 ## Tests
 
 ```bash
-dotnet test CanDroneX.sln --filter "Categorie!=Integration"   # unitaires et API, sans Docker
+dotnet test CanDroneX.sln --filter "Categorie!=Integration"   # unitaires, API, contrats : sans Docker
 dotnet test CanDroneX.sln                                     # + intégration PostgreSQL (Testcontainers, Docker requis)
 ```
 

@@ -36,6 +36,7 @@ public sealed record ServiceReponse(
 /// <summary>Adaptateur d'entrée REST de l'API service-inventory (TMF638), exposée par la passerelle.</summary>
 [ApiController]
 [Route("api/service-inventory/v1/service")]
+[Tags("Inventaire (UC-07, TMF638)")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 public sealed class ServiceInventoryController : ControllerBase

@@ -55,7 +55,7 @@ public sealed record SuiviActivationReponse(Guid ElementId, Guid ServiceId, stri
 /// </summary>
 [ApiController]
 [Route("api/service-activation/v1/activation")]
-[Tags("Interne (non exposé par la passerelle)")]
+[Tags("Activation (UC-06, TMF640) — interne, non exposée par la passerelle")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 public sealed class ActivationController : ControllerBase

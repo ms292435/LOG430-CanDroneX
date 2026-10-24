@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.OpenApi.Models;
+using ServiceOrdering.Api.Documentation;
 using ServiceOrdering.Api.Erreurs;
 using ServiceOrdering.Api.Observabilite;
 using ServiceOrdering.Api.Securite;
@@ -51,8 +52,17 @@ builder.Services.AddSwaggerGen(options =>
     {
         [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "bearer" } }] = []
     });
+    options.AddServer(new OpenApiServer
+    {
+        Url = "http://localhost:{port}",
+        Description = "API Gateway (KrakenD), seul point d'entrée des clients B2B",
+        Variables = { ["port"] = new OpenApiServerVariable { Default = "8080", Description = "GATEWAY_PORT du fichier .env" } }
+    });
     options.SupportNonNullableReferenceTypes();
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml"));
+    // Après les commentaires XML : les conventions s'appliquent aux textes qu'ils ont produits.
+    options.OperationFilter<ConventionsContrat>();
+    options.SchemaFilter<ConventionsContrat>();
 });
 
 var app = builder.Build();

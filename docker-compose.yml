@@ -1,5 +1,6 @@
 # CanDroneX — Phase 2 (microservices)
-# Seuls la passerelle (8080) et Keycloak (8081, pour obtenir un jeton) sont publiés sur l'hôte.
+# Seuls la passerelle (8080), Keycloak (8081, pour obtenir un jeton) et la documentation Swagger UI (8082)
+# sont publiés sur l'hôte.
 # Les microservices et leurs bases ne sont joignables que sur le réseau Docker interne.
 name: candronex
 
@@ -41,6 +42,23 @@ services:
       drone-management-service: { condition: service_started }
       service-ordering-service: { condition: service_started }
       slice-service: { condition: service_started }
+
+  # --- Documentation des API : contrats OpenAPI de docs/openapi (générés depuis le code) ---------
+  # « Try it out » appelle la passerelle ; le jeton s'obtient par OAuth2 client credentials ou se colle tel quel.
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.32.15
+    environment:
+      URLS: >-
+        [{"url": "openapi/api-gateway.yaml", "name": "API Gateway (contrat public)"},
+         {"url": "openapi/drone-management-service.yaml", "name": "drone-management-service"},
+         {"url": "openapi/service-ordering-service.yaml", "name": "service-ordering-service"},
+         {"url": "openapi/slice-service.yaml", "name": "slice-service"}]
+      URLS_PRIMARY_NAME: API Gateway (contrat public)
+      PERSIST_AUTHORIZATION: "true"
+    volumes:
+      - ./docs/openapi:/usr/share/nginx/html/openapi:ro
+    ports:
+      - "${SWAGGER_UI_PORT:-8082}:8080"
 
   # --- drone-management-service : UC-02 et résolution de l'identité réseau ----------------------
   drone-management-service:

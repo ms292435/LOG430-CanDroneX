@@ -22,6 +22,7 @@ public sealed record CaracteristiqueSpecificationReponse(string Nom, string Vale
 /// <summary>Adaptateur d'entrée REST de l'API service-catalog (TMF633), exposée par la passerelle.</summary>
 [ApiController]
 [Route("api/service-catalog/v1/serviceSpecification")]
+[Tags("Catalogue (UC-03, TMF633)")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 public sealed class ServiceSpecificationController : ControllerBase

@@ -86,7 +86,10 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 - Codes : 201 création, 202 activation acceptée, 200 lecture ou rejeu idempotent, 400 forme invalide, 401, 404 (ressource d'un autre client), 409 conflit, 422 règle métier violée, 503 dépendance indisponible.
 - Erreurs au format Problem Details (RFC 9457) avec `traceId` et `correlationId`.
 - L'IMSI n'est jamais exposée aux clients : seule la route interne `GET /api/drone-management/v1/drone/{droneId}/identiteReseau`, absente de la passerelle, la retourne.
-- Contrats OpenAPI générés par Swashbuckle, exportés en YAML dans `docs/openapi/` ; contrat de la passerelle (oauth2 `clientCredentials`) écrit à la main ; conteneur Swagger UI.
+- Contrats OpenAPI générés par Swashbuckle, exportés en YAML dans `docs/openapi/`, avec des conventions communes (erreurs en `application/problem+json`, en-tête `X-Correlation-Id`, 401 et 500 décrits). Un test par service échoue si le contrat publié ne correspond plus à l'API.
+- Contrat de la passerelle **assemblé** plutôt qu'écrit à la main (écart à la décision initiale) : exactement les routes de `krakend.json`, avec les opérations et schémas des contrats des services, et la sécurité `oauth2` `clientCredentials` (URL du jeton du Keycloak fourni) plus un schéma `bearer` équivalent. Il ne peut donc pas dériver de la configuration ; des tests vérifient aussi qu'aucune route interne n'est exposée et que toute route publique est routée.
+- Swagger UI (conteneur, port 8082) sert les quatre contrats ; « Try it out » appelle la passerelle. Le jeton se colle dans le schéma `bearer`, car le Keycloak fourni ne renvoie pas d'en-tête CORS sur la réponse du jeton.
+- **Limite de KrakenD CE** : quand un microservice est injoignable, la passerelle répond 500 sans corps (constat du projet de démarrage fourni ; ni la configuration ni Lua ne permettent d'y mettre un corps sans plugin Go). Les erreurs produites par les microservices, dont le 503 de la commande quand le registre des drones est en panne, ont le format uniforme RFC 9457.
 
 ## 8. Organisation du code
 

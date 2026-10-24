@@ -1,0 +1,470 @@
+openapi: 3.0.1
+info:
+  title: CanDroneX — service-inventory et service-activation
+  description: 'Inventaire des services de connectivité des drones (TMF638) et activation des slices sur le réseau 5G (UC-06, TMF640, route interne). Chaque appel exige un jeton Keycloak (client credentials) ; un client ne voit que ses services.'
+  version: v1
+servers:
+  - url: 'http://localhost:{port}'
+    description: 'API Gateway (KrakenD), seul point d''entrée des clients B2B'
+    variables:
+      port:
+        default: '8080'
+        description: GATEWAY_PORT du fichier .env
+paths:
+  /api/service-activation/v1/activation:
+    post:
+      tags:
+        - 'Activation (UC-06, TMF640) — interne, non exposée par la passerelle'
+      summary: 'Demande l''activation d''un élément de commande (UC-06). La demande est acceptée puis traitée en arrière-plan. Idempotente : redemander le même élément retourne la demande existante, sans nouvelle configuration réseau.'
+      parameters:
+        - name: X-Correlation-Id
+          in: header
+          description: 'Identifiant de corrélation (1 à 128 caractères parmi A-Z a-z 0-9 . _ -), repris dans les journaux de chaque service ; généré s''il est absent ou invalide.'
+          schema:
+            maxLength: 128
+            pattern: '^[A-Za-z0-9._-]{1,128}$'
+            type: string
+          example: cmd-0042
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemandeActivationRequete'
+        required: true
+      responses:
+        '401':
+          description: 'Jeton absent, mal formé, mal signé, expiré, d''un autre émetteur ou sans l''audience candronex-api.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '202':
+          description: 'Demande acceptée ; le service est inscrit à l''inventaire, en activation.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiviActivationReponse'
+        '200':
+          description: 'L''élément avait déjà une demande : son suivi est retourné.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiviActivationReponse'
+        '400':
+          description: Champ absent ou mal formé.
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '422':
+          description: 'Drone inconnu du client, action non prise en charge ou caractéristiques réseau incomplètes.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Le registre des drones ne répond pas ; rien n'a été enregistré.
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: 'Erreur inattendue, sans détail interne.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - 'Activation (UC-06, TMF640) — interne, non exposée par la passerelle'
+      summary: 'Suit les activations des éléments demandés, pour les éléments du client seulement.'
+      parameters:
+        - name: elementId
+          in: query
+          description: 'Éléments de commande suivis (paramètre répété : ?elementId=...&elementId=...).'
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+        - name: X-Correlation-Id
+          in: header
+          description: 'Identifiant de corrélation (1 à 128 caractères parmi A-Z a-z 0-9 . _ -), repris dans les journaux de chaque service ; généré s''il est absent ou invalide.'
+          schema:
+            maxLength: 128
+            pattern: '^[A-Za-z0-9._-]{1,128}$'
+            type: string
+          example: cmd-0042
+      responses:
+        '401':
+          description: 'Jeton absent, mal formé, mal signé, expiré, d''un autre émetteur ou sans l''audience candronex-api.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SuiviActivationReponse'
+        '400':
+          description: Bad Request
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '500':
+          description: 'Erreur inattendue, sans détail interne.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/service-inventory/v1/service:
+    get:
+      tags:
+        - 'Inventaire (UC-07, TMF638)'
+      summary: 'Liste les services du client, ou ceux d''un de ses drones : l''état de chaque slice est indépendant (UC-07). L''inventaire répond sans interroger le réseau.'
+      parameters:
+        - name: droneId
+          in: query
+          description: Limite la liste aux services de ce drone.
+          schema:
+            type: string
+            format: uuid
+        - name: X-Correlation-Id
+          in: header
+          description: 'Identifiant de corrélation (1 à 128 caractères parmi A-Z a-z 0-9 . _ -), repris dans les journaux de chaque service ; généré s''il est absent ou invalide.'
+          schema:
+            maxLength: 128
+            pattern: '^[A-Za-z0-9._-]{1,128}$'
+            type: string
+          example: cmd-0042
+      responses:
+        '401':
+          description: 'Jeton absent, mal formé, mal signé, expiré, d''un autre émetteur ou sans l''audience candronex-api.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceReponse'
+        '500':
+          description: 'Erreur inattendue, sans détail interne.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/service-inventory/v1/service/{serviceId}':
+    get:
+      tags:
+        - 'Inventaire (UC-07, TMF638)'
+      summary: Consulte un service de l'inventaire.
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Correlation-Id
+          in: header
+          description: 'Identifiant de corrélation (1 à 128 caractères parmi A-Z a-z 0-9 . _ -), repris dans les journaux de chaque service ; généré s''il est absent ou invalide.'
+          schema:
+            maxLength: 128
+            pattern: '^[A-Za-z0-9._-]{1,128}$'
+            type: string
+          example: cmd-0042
+      responses:
+        '401':
+          description: 'Jeton absent, mal formé, mal signé, expiré, d''un autre émetteur ou sans l''audience candronex-api.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceReponse'
+        '404':
+          description: 'Service inexistant ou appartenant à un autre client, sans distinction.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: 'Erreur inattendue, sans détail interne.'
+          headers:
+            X-Correlation-Id:
+              description: Identifiant de corrélation de la requête.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  schemas:
+    CaracteristiqueDto:
+      type: object
+      properties:
+        nom:
+          type: string
+          nullable: true
+        valeur:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CaracteristiqueReponse:
+      type: object
+      properties:
+        nom:
+          type: string
+        valeur:
+          type: string
+      additionalProperties: false
+    DemandeActivationRequete:
+      required:
+        - acceptedAt
+        - action
+        - caracteristiques
+        - commandeId
+        - droneId
+        - elementId
+        - specification
+        - versionSpecification
+      type: object
+      properties:
+        elementId:
+          type: string
+          format: uuid
+        commandeId:
+          type: string
+          format: uuid
+        droneId:
+          type: string
+          format: uuid
+        action:
+          minLength: 1
+          type: string
+          example: AJOUTER
+        specification:
+          minLength: 1
+          type: string
+          example: C2_URLLC
+        versionSpecification:
+          minLength: 1
+          type: string
+          example: '1.0'
+        caracteristiques:
+          minItems: 1
+          type: array
+          items:
+            $ref: '#/components/schemas/CaracteristiqueDto'
+        acceptedAt:
+          type: string
+          description: 'Acceptation de la commande : début du délai d''activation mesuré.'
+          format: date-time
+      additionalProperties: false
+      description: Demande d'activation d'un élément de commande ; tout ce qu'il faut est figé dans la commande.
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          format: int32
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+      additionalProperties: { }
+    ServiceReponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        droneId:
+          type: string
+          format: uuid
+        specification:
+          type: string
+        caracteristiques:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaracteristiqueReponse'
+        etat:
+          type: string
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        causeEchec:
+          type: string
+          nullable: true
+        commandeId:
+          type: string
+          format: uuid
+        elementId:
+          type: string
+          format: uuid
+      additionalProperties: false
+      description: 'Un service de connectivité d''un drone, tel que l''inventaire de CanDroneX le connaît.'
+    SuiviActivationReponse:
+      type: object
+      properties:
+        elementId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        etat:
+          type: string
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cause:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: 'Suivi d''une activation, tel que service-ordering-service le relit.'
+    ValidationProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          format: int32
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      additionalProperties: { }
+  securitySchemes:
+    bearer:
+      type: http
+      description: 'Jeton obtenu auprès de Keycloak (realm candronex), transmis tel quel par la passerelle.'
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearer: [ ]
