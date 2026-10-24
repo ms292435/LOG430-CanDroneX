@@ -22,12 +22,22 @@ rectangle "**Traçabilité**\nhors périmètre Phase 2\n(journaux corrélés)" a
 
 Catalogue --> Commandes : offre figée dans\nl'élément (en mémoire)
 Drones --> Commandes : « le drone est-il au client ? »\nREST, client-fournisseur
-Commandes --> Activation : demande d'activation par élément\nREST, idempotente (elementId)
+Commandes --> Activation : demande d'activation par élément\net suivi de son état\nREST, idempotente (elementId)
 Drones --> Activation : droneId → IMSI\nREST interne
 Activation --> Inventaire : résultat reflété\n(même transaction)
 Activation --> Reseau : NetworkProvisioningPort\n(couche anticorruption)
 Clients ..> Drones : identité du client (azp)
 Clients ..> Commandes
 Clients ..> Inventaire
-Commandes ..> Inventaire : suivi de l'état\n(relu par Commande)
+
+legend right
+  **Légende**
+  dossier : microservice ; cadre gris : bounded context
+  cadre blanc : contexte assuré hors de nos services
+  flèche pleine : le contexte d'origine (fournisseur) sert
+  le contexte cible (client) : appel REST, appel en mémoire
+  ou port vers le réseau
+  flèche pointillée : fourniture de l'identité du client
+  (claim azp du jeton émis par Keycloak)
+endlegend
 @enduml

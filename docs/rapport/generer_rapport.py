@@ -151,11 +151,13 @@ class Redacteur:
         for k, rangee in enumerate(rangees):
             entete = k == 0
             xml.append(f'<w:tr><w:trPr>{"<w:tblHeader/>" if entete else "<w:cantSplit/>"}</w:trPr>')
-            for largeur, cellule in zip(largeurs, rangee):
+            for colonne, (largeur, cellule) in enumerate(zip(largeurs, rangee)):
                 fond = '<w:shd w:val="clear" w:color="auto" w:fill="2C3E5E"/>' if entete else ""
+                # Convention du rapport : la première colonne d'un tableau est toujours en gras.
+                gras = entete or colonne == 0
                 paragraphes = "".join(
                     f'<w:p><w:pPr><w:spacing w:before="0" w:after="40"/></w:pPr>'
-                    f'{self.runs(morceau, gras=entete, couleur="FFFFFF" if entete else None, taille=9.5)}</w:p>'
+                    f'{self.runs(morceau, gras=gras, couleur="FFFFFF" if entete else None, taille=9.5)}</w:p>'
                     for morceau in cellule.split("<br>"))
                 xml.append(f'<w:tc><w:tcPr><w:tcW w:w="{largeur}" w:type="dxa"/>{fond}<w:tcMar><w:top w:w="60" w:type="dxa"/>'
                            f'<w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/>'
@@ -328,7 +330,13 @@ def main():
     document = docx.Document(str(GABARIT))
     redacteur = Redacteur(document)
     appliquer(document, lire_blocs(), redacteur)
-    document.save(str(sortie))
+    try:
+        document.save(str(sortie))
+    except PermissionError:
+        # Le rapport est ouvert dans Word, qui verrouille le fichier : on écrit une copie à côté.
+        sortie = sortie.with_name(f"{sortie.stem}-mis-a-jour{sortie.suffix}")
+        document.save(str(sortie))
+        print(f"Fichier ouvert dans Word : copie écrite à la place.")
     restantes = sections_a_rediger(document)
     print(f"Rapport écrit : {sortie} ({redacteur.figures} figure(s))")
     print(f"Sections encore à rédiger ({len(restantes)}) : " + ("; ".join(restantes) if restantes else "aucune"))

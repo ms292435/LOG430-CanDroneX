@@ -27,3 +27,6 @@ skinparam StateBackgroundColor #EEF2F8
 skinparam ClassBorderColor #2C3E5E
 skinparam ClassBackgroundColor #FFFFFF
 skinparam ClassHeaderBackgroundColor #EEF2F8
+skinparam LegendBackgroundColor #F7F9FC
+skinparam LegendBorderColor #BFC7D4
+skinparam LegendFontSize 12

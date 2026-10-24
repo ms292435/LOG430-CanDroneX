@@ -27,4 +27,14 @@ Passerelle ..> Keycloak : JWKS (validation)
 Drone ..> Keycloak : JWKS
 Ordering ..> Keycloak : JWKS
 Slice ..> Keycloak : JWKS
+
+legend right
+  **Légende**
+  flèche pleine : requête HTTP/JSON (jeton, appel métier
+  ou appel interne) ; (1) et (2) : ordre côté client
+  flèche pointillée : lecture des clés publiques de Keycloak
+  (JWKS) pour valider la signature des jetons
+  cadre : réseau Docker Compose ; seuls les ports « publiés »
+  sont joignables depuis l'hôte
+endlegend
 @enduml
