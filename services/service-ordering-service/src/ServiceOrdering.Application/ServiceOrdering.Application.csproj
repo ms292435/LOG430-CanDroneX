@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <ProjectReference Include="..\ServiceOrdering.Domain\ServiceOrdering.Domain.csproj" />
+  </ItemGroup>
+</Project>

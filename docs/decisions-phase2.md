@@ -53,7 +53,7 @@ slice-service            ──► MockOpen5GSAdapter         (NetworkProvisioni
 
 | Situation | Comportement |
 |---|---|
-| Appel entre services | Délai d'attente de 2 s par appel ; une seule nouvelle tentative, sur les GET seulement. Délai global de 5 s à la passerelle. |
+| Appel entre services | Délai d'attente de 2 s par tentative, 4 s au total ; une seule nouvelle tentative, sûre parce que les deux API appelées sont idempotentes (lecture d'un drone, demande d'activation dédupliquée par `elementId`) ; disjoncteur. La passerelle accorde 10 s aux routes de commande (vérification du drone puis transmission à Slice) et 5 s aux autres. |
 | Drone injoignable au POST de la commande | 503 Problem Details, rien n'est persisté ; le client rejoue avec la même `Idempotency-Key`. |
 | Slice injoignable au POST de la commande | Commande enregistrée (201), élément `EN_ATTENTE` ; l'envoi est relancé au prochain GET ou au rejeu du POST. La commande n'est jamais perdue. |
 | Mock lent | Délai d'attente configurable (5 s par défaut) ; au-delà, l'activation échoue (`DELAI_DEPASSE`). |
@@ -65,7 +65,8 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 ## 6. Modèle de domaine de UC-06
 
 - **Catalogue** : `ServiceSpecification` avec des `CharacteristicSpecification` (`sst`, `sd`, `dnn`, `5qi`, `latenceMaxMs`, `fiabilite`, `debitMontantMbps`).
-- **Élément de commande** : fige `droneId`, l'action `AJOUTER`, la spécification, sa version et une copie des caractéristiques.
+- **Élément de commande** : fige `droneId`, l'action `AJOUTER`, la spécification, sa version et une copie des caractéristiques (colonne JSONB : copie immuable, lue et écrite d'un bloc). Une commande peut viser plusieurs drones ; un même service ne peut pas être demandé deux fois pour un même drone (422). Un état d'élément ne recule jamais en base, même si deux lectures concurrentes le mettent à jour.
+- **Drone inconnu dans une commande** : 422, avec le même message pour un drone inexistant et pour celui d'un autre client (la ressource créée est la commande ; le drone référencé n'est pas éligible).
 - **Slice** : `DemandeActivation` (`RECUE → EN_COURS → REUSSIE | ECHOUEE`, `elementId` unique) et `Service` d'inventaire (`EN_ACTIVATION → ACTIF | EN_ECHEC`, créé dès l'acceptation, porte `activatedAt`). Les deux sont mis à jour dans une même transaction locale.
 - **Drone** : identifiant métier (ex. `DRN-0231`), unique par client, en plus du `droneId` technique.
 - **P95** : calculé dans la base de Slice sur `activatedAt − acceptedAt` ; un service non actif à la fin du test compte comme dépassant 5 s.

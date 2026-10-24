@@ -39,6 +39,7 @@ services:
     depends_on:
       keycloak: { condition: service_healthy }
       drone-management-service: { condition: service_started }
+      service-ordering-service: { condition: service_started }
 
   # --- drone-management-service : UC-02 et résolution de l'identité réseau ----------------------
   drone-management-service:
@@ -71,5 +72,39 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # --- service-ordering-service : catalogue (TMF633) et commandes (UC-04, TMF641) ------------------
+  service-ordering-service:
+    build:
+      context: .
+      dockerfile: services/service-ordering-service/Dockerfile
+    environment:
+      ConnectionStrings__ServiceOrdering: Host=ordering-db;Database=service_ordering;Username=service_ordering;Password=${ORDERING_DB_PASSWORD}
+      Jwt__Emetteur: http://localhost:8081/realms/candronex
+      Jwt__Audience: candronex-api
+      Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
+      ServicesDistants__DroneManagementUrl: http://drone-management-service:8080
+      ServicesDistants__SliceServiceUrl: http://slice-service:8080
+    depends_on:
+      ordering-db: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    restart: unless-stopped
+    # pas de "ports:" : joignable uniquement par la passerelle
+
+  ordering-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: service_ordering
+      POSTGRES_USER: service_ordering
+      POSTGRES_PASSWORD: ${ORDERING_DB_PASSWORD}
+    volumes:
+      - ordering-db-data:/var/lib/postgresql/data
+      - ./services/service-ordering-service/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U service_ordering -d service_ordering"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   drone-db-data:
+  ordering-db-data:

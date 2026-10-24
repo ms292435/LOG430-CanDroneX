@@ -122,6 +122,137 @@
           "cache": true
         }
       }
+    },
+    {
+      "@comment": "UC-03 - Consulter le catalogue des offres",
+      "endpoint": "/api/service-catalog/v1/serviceSpecification",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://service-ordering-service:8080"
+          ],
+          "url_pattern": "/api/service-catalog/v1/serviceSpecification",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
+    },
+    {
+      "@comment": "Consulter une offre du catalogue",
+      "endpoint": "/api/service-catalog/v1/serviceSpecification/{specificationId}",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://service-ordering-service:8080"
+          ],
+          "url_pattern": "/api/service-catalog/v1/serviceSpecification/{specificationId}",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
+    },
+    {
+      "@comment": "UC-04 - Commander des services. Delai plus long : la commande verifie le drone puis transmet chaque element au service des slices (2 s par tentative).",
+      "endpoint": "/api/service-ordering/v1/serviceOrder",
+      "method": "POST",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id",
+        "Idempotency-Key"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://service-ordering-service:8080"
+          ],
+          "url_pattern": "/api/service-ordering/v1/serviceOrder",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      },
+      "timeout": "10s"
+    },
+    {
+      "@comment": "UC-05 - Suivre une commande et l'activation de ses elements",
+      "endpoint": "/api/service-ordering/v1/serviceOrder/{commandeId}",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://service-ordering-service:8080"
+          ],
+          "url_pattern": "/api/service-ordering/v1/serviceOrder/{commandeId}",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      },
+      "timeout": "10s"
     }
   ]
 }
