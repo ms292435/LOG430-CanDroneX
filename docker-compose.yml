@@ -40,6 +40,7 @@ services:
       keycloak: { condition: service_healthy }
       drone-management-service: { condition: service_started }
       service-ordering-service: { condition: service_started }
+      slice-service: { condition: service_started }
 
   # --- drone-management-service : UC-02 et résolution de l'identité réseau ----------------------
   drone-management-service:
@@ -105,6 +106,47 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # --- slice-service : activation des slices (UC-06, TMF640) et inventaire (TMF638) ----------------
+  slice-service:
+    build:
+      context: .
+      dockerfile: services/slice-service/Dockerfile
+    environment:
+      ConnectionStrings__Slices: Host=slice-db;Database=slice_service;Username=slice_service;Password=${SLICE_DB_PASSWORD};Maximum Pool Size=200
+      Jwt__Emetteur: http://localhost:8081/realms/candronex
+      Jwt__Audience: candronex-api
+      Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
+      ServicesDistants__DroneManagementUrl: http://drone-management-service:8080
+      # Réseau 5G simulé (MockOpen5GSAdapter, interne au service) : latence par activation et taux d'échec
+      MockOpen5GS__LatenceMinMs: ${MOCK_LATENCE_MIN_MS:-300}
+      MockOpen5GS__LatenceMaxMs: ${MOCK_LATENCE_MAX_MS:-1500}
+      MockOpen5GS__TauxEchec: ${MOCK_TAUX_ECHEC:-0}
+      # Au-delà, l'activation échoue (DELAI_DEPASSE) ; activations traitées simultanément au plus
+      Activation__DelaiMaxReseau: "00:00:05"
+      Processeur__ConcurrenceMax: "500"
+    depends_on:
+      slice-db: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    restart: unless-stopped
+    # pas de "ports:" : joignable uniquement par la passerelle et service-ordering-service
+
+  slice-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: slice_service
+      POSTGRES_USER: slice_service
+      POSTGRES_PASSWORD: ${SLICE_DB_PASSWORD}
+    volumes:
+      - slice-db-data:/var/lib/postgresql/data
+      - ./services/slice-service/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./services/slice-service/db/mesures:/mesures:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slice_service -d slice_service"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   drone-db-data:
   ordering-db-data:
+  slice-db-data:

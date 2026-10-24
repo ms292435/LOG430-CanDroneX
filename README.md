@@ -2,21 +2,24 @@
 
 Plateforme B2B de slices réseau 5G pour drones (LOG430, ETS, automne 2026). La Phase 2 fait évoluer le monolithe modulaire de la Phase 1 (branche `phase1`) vers des microservices exposés par une API Gateway et protégés par le Keycloak fourni.
 
-> État : `drone-management-service` (UC-02) et `service-ordering-service` (UC-04 et catalogue) sont en place derrière la passerelle. `slice-service` (UC-06) arrive à l'étape suivante : d'ici là, les éléments de commande restent `EN_ATTENTE`. Les décisions d'architecture sont consignées dans [docs/decisions-phase2.md](docs/decisions-phase2.md).
+> État : UC-02, UC-04 et UC-06 fonctionnent de bout en bout dans trois microservices derrière la passerelle. Restent à livrer : contrats OpenAPI exportés et Swagger UI, tests de charge, rapport. Les décisions d'architecture sont consignées dans [docs/decisions-phase2.md](docs/decisions-phase2.md).
 
 ## Architecture
 
 ```
 Client B2B ──(client credentials)──► Keycloak :8081  ──► JWT (azp = client, aud = candronex-api)
     │
-    └─(Authorization: Bearer)──► KrakenD :8080 ─┬─► drone-management-service ──► drone-db
-                                  valide le JWT  └─► service-ordering-service ──► ordering-db
-                                                       │  (même jeton propagé)
-                                                       ├─► drone-management-service  (le drone est-il au client ?)
-                                                       └─► slice-service             (demande d'activation)
+    └─(Authorization: Bearer)──► KrakenD :8080 ─┬─► drone-management-service ──► drone-db       (UC-02)
+                                  valide le JWT  ├─► service-ordering-service ──► ordering-db    (UC-04, catalogue)
+                                                 │     │ même jeton propagé
+                                                 │     ├─► drone-management-service   le drone est-il au client ?
+                                                 │     └─► slice-service              demande d'activation (interne)
+                                                 └─► slice-service ──► slice-db                   (UC-06, inventaire)
+                                                       ├─► drone-management-service   droneId → IMSI (interne)
+                                                       └─► MockOpen5GSAdapter         NetworkProvisioningPort
 ```
 
-Chaque service revalide le jeton et filtre les données par client (claim `azp`).
+Chaque service revalide le jeton et filtre les données par client (claim `azp`). slice-service accepte la demande d'activation (202), puis la traite en arrière-plan : appel au réseau simulé, puis mise à jour de la demande et de l'inventaire.
 
 Seuls la passerelle (8080) et Keycloak (8081) sont publiés sur l'hôte.
 
@@ -35,6 +38,31 @@ docker compose ps           # attendre que keycloak soit « healthy »
 docker compose down         # arrêter (les données sont conservées)
 docker compose down -v      # arrêter et réinitialiser les bases (données de démonstration rechargées au prochain démarrage)
 ```
+
+## Scénario de bout en bout (UC-02 → UC-04 → UC-06)
+
+```bash
+./scripts/demo-bout-en-bout.sh
+```
+
+Le script obtient un jeton, enregistre un drone avec son IMSI, commande C2 / URLLC et Imagerie / eMBB, attend que les deux services soient actifs, puis affiche l'inventaire du drone et le parcours de la commande dans les journaux des services. Pour démontrer l'activation en échec :
+
+```bash
+MOCK_TAUX_ECHEC=1 docker compose up -d slice-service   # le cœur 5G simulé refuse tout
+./scripts/demo-bout-en-bout.sh                          # services EN_ECHEC, commande ECHOUEE
+docker compose up -d slice-service                      # retour au taux par défaut (0)
+```
+
+Paramètres du réseau simulé (`.env` ou variables d'environnement) : `MOCK_LATENCE_MIN_MS` (300), `MOCK_LATENCE_MAX_MS` (1500), `MOCK_TAUX_ECHEC` (0, entre 0 et 1).
+
+## Mesurer le délai d'activation (P95)
+
+```bash
+docker compose exec -T slice-db psql -U slice_service -d slice_service \
+  -v debut="'2026-10-24T12:00:00Z'" -v fin="'2026-10-24T12:06:00Z'" -f /mesures/p95-delai-activation.sql
+```
+
+La requête ([services/slice-service/db/mesures/p95-delai-activation.sql](services/slice-service/db/mesures/p95-delai-activation.sql)) calcule le P95 de `activatedAt − acceptedAt` sur tous les services commandés dans la fenêtre ; un service non actif à la fin du test compte comme dépassant 5 s.
 
 ## Obtenir un jeton et appeler la passerelle
 
@@ -64,6 +92,9 @@ curl -i -X POST http://localhost:8080/api/service-ordering/v1/serviceOrder \
 
 # Suivre la commande (URL donnée par l'en-tête Location)
 curl -s http://localhost:8080/api/service-ordering/v1/serviceOrder/<commandeId> -H "Authorization: Bearer $TOKEN"
+
+# État des slices du drone, depuis l'inventaire de CanDroneX
+curl -s "http://localhost:8080/api/service-inventory/v1/service?droneId=00000000-0000-0000-0000-000000000231" -H "Authorization: Bearer $TOKEN"
 ```
 
 Le jeton dure 5 minutes. Données de démonstration (`services/drone-management-service/db/init.sql`) :
@@ -83,8 +114,8 @@ dotnet test CanDroneX.sln                                     # + intégration P
 ## Journaux
 
 ```bash
-docker compose logs -f drone-management-service service-ordering-service
-docker compose logs --no-log-prefix service-ordering-service | grep '"commandeId":"<commandeId>"'
+docker compose logs -f drone-management-service service-ordering-service slice-service
+docker compose logs --no-log-prefix service-ordering-service slice-service | grep '"commandeId":"<commandeId>"' | sort
 ```
 
 Chaque ligne est un objet JSON avec l'horodatage, le nom du service, l'identifiant de corrélation (`X-Correlation-Id`, transmis par la passerelle puis d'un service à l'autre, ou généré) et, pour une commande, son identifiant (`commandeId`).

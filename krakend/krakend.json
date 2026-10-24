@@ -253,6 +253,73 @@
         }
       },
       "timeout": "10s"
+    },
+    {
+      "@comment": "UC-07 - Inventaire des services du client (?droneId=... pour l'etat des slices d'un drone). L'API service-activation reste interne : elle n'est pas declaree ici.",
+      "endpoint": "/api/service-inventory/v1/service",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://slice-service:8080"
+          ],
+          "url_pattern": "/api/service-inventory/v1/service",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      },
+      "input_query_strings": [
+        "droneId"
+      ]
+    },
+    {
+      "@comment": "Consulter un service de l'inventaire",
+      "endpoint": "/api/service-inventory/v1/service/{serviceId}",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://slice-service:8080"
+          ],
+          "url_pattern": "/api/service-inventory/v1/service/{serviceId}",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
     }
   ]
 }

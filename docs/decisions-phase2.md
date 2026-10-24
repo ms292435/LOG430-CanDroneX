@@ -71,6 +71,15 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 - **Drone** : identifiant métier (ex. `DRN-0231`), unique par client, en plus du `droneId` technique.
 - **P95** : calculé dans la base de Slice sur `activatedAt − acceptedAt` ; un service non actif à la fin du test compte comme dépassant 5 s.
 
+### Précisions de l'implémentation de slice-service
+
+- **Port réseau** : `INetworkProvisioningPort.ConfigurerSliceAsync(imsi, configuration)`, défini dans la couche application. La configuration (`ConfigurationSlice` : S-NSSAI, DNN, 5QI) est un objet du domaine interprété depuis les caractéristiques figées ; une configuration incomplète est refusée dès la réception (422).
+- **MockOpen5GSAdapter** : latence uniforme entre `MockOpen5GS__LatenceMinMs` et `MockOpen5GS__LatenceMaxMs`, refus avec la probabilité `MockOpen5GS__TauxEchec`. Il tient en mémoire les profils d'abonnés (IMSI → slices) : une slice déjà associée n'est pas configurée une seconde fois.
+- **Réception** : la demande, l'IMSI résolue et le service d'inventaire (`EN_ACTIVATION`) sont enregistrés dans une même transaction, puis la demande entre dans la file. Une demande dont l'élément existe déjà retourne 200 avec son suivi, sans nouvelle configuration.
+- **Traitement** : `RECUE → EN_COURS` (persisté), appel au port avec un délai d'attente (5 s), puis demande et service mis à jour ensemble. Erreur de l'adaptateur : `RESEAU_INJOIGNABLE` ; délai dépassé : `DELAI_DEPASSE` ; refus : `ECHEC_SIMULE`.
+- **Traçabilité** : la demande conserve le `X-Correlation-Id` de la requête d'origine, repris avec le `commandeId` dans les journaux du traitement différé.
+- **IMSI** : conservée dans la base de slice-service (contexte Activation seulement), car le traitement est différé ; jamais retournée par l'API ni écrite dans les journaux.
+
 ## 7. Contrats d'API
 
 - Routes `/api/{api}/v1/{ressource}` alignées sur TMF ; champs JSON dans le langage ubiquitaire (français).
