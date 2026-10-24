@@ -1,0 +1,50 @@
+@startuml deploiement
+!include commun.iuml
+title Vue de déploiement — Docker Compose (poste local)
+
+node "Hôte (Docker Desktop)" as Hote {
+  node "réseau candronex_default" as Reseau {
+    node "api-gateway\ndevopsfaith/krakend:2.7.2" as GW
+    node "keycloak\nquay.io/keycloak/keycloak:26.0\nrealm-candronex.json importé" as KC
+    node "swagger-ui\nswaggerapi/swagger-ui:v5.32.15\ndocs/openapi monté" as SW
+    node "drone-management-service\n(image construite, port 8080)" as Drone
+    node "service-ordering-service\n(image construite, port 8080)" as Ordering
+    node "slice-service\n(image construite, port 8080)\nMockOpen5GSAdapter interne" as Slice
+    database "drone-db\npostgres:16-alpine\nvolume drone-db-data" as DbDrone
+    database "ordering-db\npostgres:16-alpine\nvolume ordering-db-data" as DbOrdering
+    database "slice-db\npostgres:16-alpine\nvolume slice-db-data" as DbSlice
+    node "k6 (profil charge)\ngrafana/k6:0.54.0" as K6 #FFFFFF
+  }
+}
+
+actor "Client B2B" as Client
+Client --> GW : ${GATEWAY_PORT:-8080} → 8080
+Client --> KC : 8081 → 8080
+Client --> SW : 8082 → 8080
+
+GW --> Drone
+GW --> Ordering
+GW --> Slice
+Ordering --> Drone
+Ordering --> Slice
+Slice --> Drone
+Drone --> DbDrone : 5432
+Ordering --> DbOrdering : 5432
+Slice --> DbSlice : 5432
+GW ..> KC : JWKS
+Drone ..> KC : JWKS
+Ordering ..> KC : JWKS
+Slice ..> KC : JWKS
+K6 --> GW : charge
+K6 --> KC : jeton
+
+legend right
+  **Légende**
+  nœud : conteneur ; cylindre : conteneur PostgreSQL avec son volume
+  flèche pleine annotée « port hôte → port conteneur » : seul accès depuis l'hôte
+  (passerelle, Keycloak, Swagger UI) ; les autres conteneurs n'ont aucun port publié
+  flèche pleine interne : appel HTTP ou SQL par le réseau Docker
+  flèche pointillée : lecture des clés publiques (JWKS) de Keycloak
+  cadre blanc : k6, lancé seulement pour les mesures (docker compose --profile charge)
+endlegend
+@enduml

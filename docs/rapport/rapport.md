@@ -222,3 +222,386 @@ La cartographie de la Phase 1 est mise à jour selon les remarques reçues : le 
 - Les interfaces C# des projets `Contracts` (`IDronesApi`, `ICatalogueApi`) sont remplacées par des API REST et des DTO ; l’échange vers Commandes n’expose plus l’IMSI (remarque de la Phase 1).
 
 Les termes du domaine sont définis au glossaire (§12).
+
+@@ 4.1 Style architectural et frontières de microservices
+La solution est une architecture **microservices** : trois services REST synchrones derrière une passerelle unique, chacun organisé en **architecture hexagonale** (§5.2) et propriétaire de sa base PostgreSQL. Les frontières suivent les bounded contexts de la cartographie (§3.3) et les modules de la Phase 1, selon trois critères :
+
+1. **Propriété des données** : chaque donnée a un seul service propriétaire, le seul à l’écrire ; les autres la lisent par son API.
+2. **Cohésion des changements** : ce qui change et se transige ensemble reste dans le même service. Le catalogue n’est lu qu’au moment de la commande, qui fige l’offre ; il reste donc avec les commandes. La demande d’activation et le service d’inventaire sont mis à jour dans la même transaction locale (avec `activatedAt`) ; ils restent donc dans slice-service.
+3. **Isolation de l’intégration réseau** : seul slice-service parle au réseau, derrière le `NetworkProvisioningPort`. C’est lui qui portera l’adaptateur Open5GS en Phase 3.
+
+| Microservice | Responsabilité | API publique (par la passerelle) | Données possédées |
+|---:19|---:29|---:27|---:25|
+| drone-management-service | Enregistrer les drones d’un client (UC-02), les consulter et résoudre l’identité réseau d’un drone pour slice-service. | `drone-management/v1` : `drone`, `drone/{droneId}` ; route interne `drone/{droneId}/identiteReseau` | `drone-db`, schéma `drones` : drone (client, identifiant métier, IMSI unique, type de carte, modèle, statut) |
+| service-ordering-service | Publier le catalogue des offres, prendre les commandes de façon idempotente (UC-04), en suivre les éléments et calculer l’état global (UC-05). | `service-catalog/v1` : `serviceSpecification` ; `service-ordering/v1` : `serviceOrder` | `ordering-db`, schémas `catalogue` (offres, caractéristiques) et `commandes` (commande, éléments, clé d’idempotence, empreinte) |
+| slice-service | Recevoir les demandes d’activation, configurer la slice par le `NetworkProvisioningPort` (UC-06) et tenir l’inventaire des services (UC-07). | `service-inventory/v1` : `service` ; route interne `service-activation/v1/activation` | `slice-db`, schémas `activation` (demandes) et `inventaire` (services, `activatedAt`) |
+
+**Dépendances.** Les appels entre services forment un graphe sans cycle : service-ordering-service appelle drone-management-service et slice-service, slice-service appelle drone-management-service, et drone-management-service n’appelle personne. slice-service ne rappelle jamais service-ordering-service : c’est la commande qui relit l’état des activations lors du suivi (§4.2). Le diagramme du §5.1 montre ces dépendances.
+
+Chaque service possède sa base et ne lit ni n’écrit dans celle d’un autre : une base par conteneur PostgreSQL, un utilisateur et un mot de passe propres à chaque service. Une donnée d’un autre service ne s’obtient que par son API (ADR-001).
+
+@@ 4.2 Communication REST
+Tous les échanges sont en HTTP/JSON synchrone. Le client B2B n’appelle que la passerelle. Les appels entre services passent directement par le réseau Docker (nom DNS du service, port 8080), jamais par la passerelle. Ils transmettent le jeton du client et l’identifiant de corrélation (`PropagationContexteHandler`). Il n’y a pas de compte technique : chaque service applique les droits du client à l’origine de l’appel.
+
+| Appelant | API sollicitée | Besoin | Route REST |
+|---:17|---:17|---:30|---:36|
+| Client B2B via la passerelle | API des drones | Enregistrer un drone et son identité réseau (UC-02). | `POST /api/drone-management/v1/drone` |
+| Client B2B via la passerelle | API des drones | Consulter les drones du client authentifié. | `GET /api/drone-management/v1/drone`, `GET …/drone/{droneId}` |
+| Client B2B via la passerelle | API du catalogue | Consulter les offres et leurs caractéristiques. | `GET /api/service-catalog/v1/serviceSpecification`, `GET …/serviceSpecification/{specificationId}` |
+| Client B2B via la passerelle | API des commandes | Commander C2 et Imagerie pour un drone (UC-04). | `POST /api/service-ordering/v1/serviceOrder` avec `Idempotency-Key` |
+| Client B2B via la passerelle | API des commandes | Suivre la commande et l’activation de chaque élément (UC-05, UC-06). | `GET /api/service-ordering/v1/serviceOrder/{commandeId}` |
+| Client B2B via la passerelle | API d’inventaire | Consulter l’état des slices d’un drone (UC-07). | `GET /api/service-inventory/v1/service?droneId=…`, `GET …/service/{serviceId}` |
+| service-ordering-service | API des drones | Vérifier que le drone existe et appartient au client avant d’accepter la commande. | `GET /api/drone-management/v1/drone/{droneId}` |
+| service-ordering-service | API d’activation (interne) | Demander l’activation de chaque élément accepté. | `POST /api/service-activation/v1/activation` |
+| service-ordering-service | API d’activation (interne) | Relire l’état des activations lors du suivi de la commande. | `GET /api/service-activation/v1/activation?elementId=…` |
+| slice-service | API des drones (interne) | Résoudre le `droneId` en IMSI et type de carte. | `GET /api/drone-management/v1/drone/{droneId}/identiteReseau` |
+
+## Demandes, réponses et erreurs
+
+- Chaque API définit ses propres DTO (records de la couche Api) ; les entités du domaine et les tables ne sont jamais exposées. Les champs JSON sont en camelCase dans le langage ubiquitaire, les dates en ISO 8601 UTC et les identifiants en UUID. Un service qui en appelle un autre a sa propre copie du DTO distant (ex. `IdentiteReseauDto`) et n’en lit que les champs utiles.
+- Une création répond `201 Created` avec l’en-tête `Location`. Une demande d’activation répond `202 Accepted`, car elle est traitée en arrière-plan. Un rejeu idempotent répond `200 OK` avec la ressource existante.
+- Les erreurs suivent la RFC 9457 (`application/problem+json`), avec `traceId` et `correlationId` :
+
+| Code | Signification dans CanDroneX |
+|---:12|---:88|
+| 400 | Requête mal formée ou champ invalide (`ValidationProblemDetails`, avec les champs en erreur). |
+| 401 | Jeton absent ou invalide. La passerelle refuse avant le service, et chaque service revalide (§4.4). |
+| 404 | Ressource absente **ou appartenant à un autre client** : la même réponse, pour ne pas révéler son existence. |
+| 409 | Conflit : IMSI ou identifiant métier déjà utilisé, ou clé d’idempotence réutilisée avec un autre contenu. |
+| 422 | Règle métier non respectée : drone inconnu du client, offre inconnue, type de carte autre que SIM ou eSIM. |
+| 503 | Dépendance indisponible : la demande n’a pas été traitée et peut être rejouée. |
+
+## Délais d’attente et réaction aux échecs
+
+Chaque client HTTP interne utilise le gestionnaire de résilience standard de .NET (Microsoft.Extensions.Http.Resilience) : 2 s par tentative, une seule reprise, 4 s au total et un disjoncteur. La reprise est sûre parce que les deux appels qui écrivent sont idempotents.
+
+| Appel | Si l’appelé est lent ou indisponible |
+|---:30|---:70|
+| ordering → drone (prise de commande) | `503` au client et rien n’est enregistré ; le client rejoue avec la même clé. |
+| ordering → slice (demande d’activation) | La commande est tout de même acceptée (`201`) : les éléments restent `EN_ATTENTE` et l’envoi est relancé au prochain suivi ou au rejeu de la clé. |
+| ordering → slice (suivi) | `200` avec le dernier état connu des éléments ; la relecture reprend au suivi suivant. |
+| slice → drone (identité réseau) | `503` à service-ordering-service : l’élément reste `EN_ATTENTE` et sera relancé. |
+| slice → réseau (`NetworkProvisioningPort`) | Au-delà de 5 s, la demande passe à `ECHOUEE` (`DELAI_DEPASSE`) ; une erreur de l’adaptateur donne `RESEAU_INJOIGNABLE`. |
+| passerelle → service | Délai de 5 s, ou 10 s sur les routes de commande. Un service injoignable donne `500` sans corps : c’est une limite acceptée de KrakenD CE (ADR-003). |
+
+Les cycles sont évités par construction : les appels suivent le graphe du §4.1, et la mise à jour de la commande se fait en *pull* (la commande relit l’activation) plutôt qu’en *push* (slice-service rappellerait la commande). ADR-004 détaille ces choix.
+
+## Idempotence et cohérence des données
+
+- **Commande** : le couple (client, `Idempotency-Key`) est unique dans `ordering-db`. Une empreinte SHA-256 du contenu est conservée avec la commande. Une même clé avec le même contenu renvoie la commande existante (`200`) ; avec un autre contenu, elle donne `409`. La commande et ses éléments sont écrits en une transaction. Si deux rejeux simultanés arrivent, la contrainte d’unicité départage les écritures : la seconde relit la commande enregistrée.
+- **Activation** : l’`elementId` est unique dans `slice-db`. Une seconde demande pour le même élément renvoie la demande existante (`200`), sans nouvelle configuration réseau. Le mock est lui aussi idempotent pour un couple (IMSI, S-NSSAI).
+- **Entre services** : la cohérence est à terme, sans transaction distribuée. slice-service est la source de vérité de l’activation, et la commande en garde une copie mise à jour au suivi. L’état d’un élément ne recule jamais (fonction SQL `commandes.rang_etat`), si bien que deux suivis concurrents ne peuvent pas ramener un élément `ACTIF` à `EN_ACTIVATION`.
+
+Les ports hexagonaux isolent ces appels du domaine. Les services applicatifs ne connaissent que des interfaces (`IRegistreDrones`, `IActivationServices`, `IResolutionIdentiteReseau`), implémentées par des adaptateurs HTTP de la couche Infrastructure. Le domaine ignore HTTP, la résilience et le jeton (§5.2).
+
+@@ 4.3 Contrats REST et OpenAPI
+Chaque API est versionnée dans son chemin : `/api/{api}/v1/{ressource}`, où `{api}` reprend le nom de l’API TM Forum correspondante (ex. `/api/service-ordering/v1/serviceOrder`). Une version 2 serait exposée sous `v2` à côté de la première, et la passerelle routerait l’une et l’autre.
+
+Les contrats OpenAPI sont **générés depuis le code** (Swashbuckle) : DTO, commentaires XML, attributs de validation et codes de réponse déclarés sur les contrôleurs. Un filtre commun (`ConventionsContrat`) ajoute à chaque opération l’en-tête `X-Correlation-Id`, les réponses d’erreur Problem Details et l’exigence du jeton. Les contrats sont exportés et versionnés dans `docs/openapi`. Un test de chaque service échoue si le contrat ne correspond plus à l’API (§8.4).
+
+| Contrat | Contenu |
+|---:30|---:70|
+| `docs/openapi/api-gateway.yaml` | Contrat public de la passerelle : les 9 routes publiques, `securitySchemes` `oauth2` (flux `clientCredentials`) et `bearer`. |
+| `docs/openapi/drone-management-service.yaml` | API des drones, route interne `identiteReseau` comprise. |
+| `docs/openapi/service-ordering-service.yaml` | API du catalogue et des commandes. |
+| `docs/openapi/slice-service.yaml` | API d’inventaire et API interne d’activation. |
+
+| Méthode | Chemin | Intention |
+|---:11|---:44|---:45|
+| POST | `/api/drone-management/v1/drone` | Enregistrer un drone (UC-02) : `201`, `400`, `409` (IMSI ou identifiant déjà utilisé), `422`. |
+| GET | `/api/drone-management/v1/drone` | Lister les drones du client (l’IMSI n’est jamais retournée). |
+| GET | `/api/drone-management/v1/drone/{droneId}` | Consulter un drone : `404` s’il est absent ou à un autre client. |
+| GET | `/api/drone-management/v1/drone/{droneId}/identiteReseau` | Interne : IMSI et type de carte, pour slice-service. |
+| GET | `/api/service-catalog/v1/serviceSpecification` | Lister les offres et leurs caractéristiques. |
+| GET | `/api/service-catalog/v1/serviceSpecification/{specificationId}` | Consulter une offre (`C2_URLLC`, `IMAGERIE_EMBB`). |
+| POST | `/api/service-ordering/v1/serviceOrder` | Commander (UC-04) : `201` et `Location`, `200` au rejeu, `409`, `422`, `503`. |
+| GET | `/api/service-ordering/v1/serviceOrder/{commandeId}` | Suivre la commande : état global, état et `activatedAt` de chaque élément. |
+| POST | `/api/service-activation/v1/activation` | Interne : demander l’activation d’un élément (`202`, `200` au rejeu, `422`, `503`). |
+| GET | `/api/service-activation/v1/activation?elementId=…` | Interne : suivre les activations des éléments du client. |
+| GET | `/api/service-inventory/v1/service?droneId=…` | Lister les services du client ou d’un drone (UC-07). |
+| GET | `/api/service-inventory/v1/service/{serviceId}` | Consulter un service de l’inventaire. |
+
+**Exemple : commande de référence (UC-04).** Requête par la passerelle, avec le jeton d’`inspectra-demo` :
+
+```
+POST /api/service-ordering/v1/serviceOrder
+Authorization: Bearer <JWT>
+Idempotency-Key: demo-0001
+Content-Type: application/json
+
+{ "elements": [
+    { "droneId": "00000000-0000-0000-0000-000000000231", "action": "AJOUTER", "specification": "C2_URLLC" },
+    { "droneId": "00000000-0000-0000-0000-000000000231", "action": "AJOUTER", "specification": "IMAGERIE_EMBB" } ] }
+```
+
+Réponse `201 Created`, `Location: /api/service-ordering/v1/serviceOrder/9b0b35d9-…` (extrait) :
+
+```
+{ "id": "9b0b35d9-7be8-40f4-b0ec-c0ec7614868e",
+  "etat": "EN_COURS",
+  "acceptedAt": "2026-10-24T21:29:29.536Z",
+  "elements": [
+    { "id": "abbda7ec-…", "droneId": "00000000-0000-0000-0000-000000000231",
+      "action": "AJOUTER", "specification": "C2_URLLC", "versionSpecification": "1.0",
+      "caracteristiques": [ { "nom": "sst", "valeur": "2" }, { "nom": "sd", "valeur": "000001" },
+                            { "nom": "dnn", "valeur": "c2.candronex" }, { "nom": "5qi", "valeur": "82" }, … ],
+      "etat": "EN_ACTIVATION", "causeEchec": null,
+      "serviceId": "391f3db0-…", "activatedAt": null },
+    { "id": "a587db15-…", "specification": "IMAGERIE_EMBB", "etat": "EN_ACTIVATION", … } ] }
+```
+
+Deux secondes plus tard, `GET …/serviceOrder/9b0b35d9-…` renvoie `COMPLETEE`, avec les deux éléments `ACTIF` et leur `activatedAt`. Rejouer la même clé avec un contenu différent donne `409` :
+
+```
+{ "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10", "title": "Conflit", "status": 409,
+  "detail": "La clé d'idempotence « demo-0001 » a déjà été utilisée pour une commande au contenu différent.",
+  "instance": "/api/service-ordering/v1/serviceOrder",
+  "traceId": "00-395b91b7…-00", "correlationId": "d1fcf59a-…" }
+```
+
+**Accès à Swagger.** Une fois le système démarré, Swagger UI est servi sur `http://localhost:8082`. Le contrat de la passerelle s’ouvre par défaut, et les trois contrats des services se choisissent dans la liste. « Try it out » appelle la passerelle. Le contrat déclare le flux `clientCredentials` avec l’URL de jeton `http://localhost:8081/realms/candronex/protocol/openid-connect/token`. Le Keycloak fourni ne renvoie toutefois pas d’en-tête CORS : on obtient donc le jeton avec curl (§7.2), puis on le colle dans le schéma `bearer` (bouton *Authorize*).
+
+Les contrats décrivent les DTO, jamais les tables. Par exemple, la réponse d’un drone ne contient pas l’IMSI, et les caractéristiques figées d’un élément (une colonne JSONB) sont exposées comme une liste `nom`/`valeur`.
+
+@@ 4.4 API Gateway et circulation du jeton
+La passerelle est **KrakenD CE 2.7.2** (`devopsfaith/krakend`) : une configuration déclarative (`krakend/krakend.json`), sans état ni base de données. ADR-003 justifie ce choix.
+
+| Élément | Configuration retenue |
+|---:22|---:78|
+| Routage | 9 routes publiques, chacune vers un seul service et sous le même chemin, sans agrégation. Les routes internes (`identiteReseau`, `service-activation`) ne sont pas déclarées : la passerelle répond `404`. |
+| Validation du JWT | `auth/validator` sur chaque route : RS256, clés lues sur `http://keycloak:8080/realms/candronex/protocol/openid-connect/certs`, émetteur `http://localhost:8081/realms/candronex`, audience `candronex-api`. Un jeton refusé donne `401` sans atteindre le service. |
+| En-têtes transmis | `Authorization`, `Content-Type`, `X-Correlation-Id`, et `Idempotency-Key` sur `POST serviceOrder` seulement. Tous les autres sont retirés : un en-tête `X-Client-Id` forgé n’arrive jamais au service. La seule chaîne de requête transmise est `droneId`, sur l’inventaire. |
+| Réponses | Encodage `no-op` : le code, le corps et les en-têtes du service sont transmis tels quels (Problem Details, `Location`). |
+| CORS | Origines `*`, méthodes `GET` et `POST`, en-têtes autorisés `Authorization`, `Content-Type`, `Idempotency-Key`, `X-Correlation-Id` ; `X-Correlation-Id` et `Location` exposés. |
+| Corrélation | La passerelle transmet `X-Correlation-Id`. Chaque service en crée un s’il est absent, le renvoie dans la réponse, le journalise et le propage à ses appels. |
+| Délais | 5 s par défaut, 10 s sur les routes de commande (qui appellent deux autres services). |
+| Service indisponible | KrakenD CE répond `500` sans corps et ne distingue pas un service en panne. Cette limite est documentée et acceptée (ADR-003). Derrière la passerelle, une dépendance indisponible donne un `503` Problem Details explicite. |
+
+**Contrat du jeton.** Le Keycloak fourni émet, par client credentials, un JWT RS256 valide 5 minutes. La signature, `exp`, `iss` (`http://localhost:8081/realms/candronex`) et `aud` (`candronex-api`) sont vérifiés. L’identité du client B2B est la claim `azp` (`inspectra-demo`, `aerotech-demo`). Un jeton sans l’audience, comme celui de `client-management-service`, est refusé.
+
+**Défense en profondeur.** Chaque microservice revalide le jeton (même émetteur, audience et signature), car les routes internes ne passent pas par la passerelle. Le document de découverte de Keycloak annonce un hôte injoignable depuis les conteneurs ; les services lisent donc directement les clés publiques sur `keycloak:8080` (`JwksRetriever`). Les autorisations B2B sont ensuite appliquées dans les données : chaque lecture et chaque écriture sont filtrées par `client_id = azp`, et une ressource d’un autre client donne `404`.
+
+| Composant | Responsabilité dans le flux |
+|---:20|---:80|
+| API Gateway | Point d’entrée unique : valide le JWT, route les appels, filtre les en-têtes et transmet le jeton Bearer tel quel ; n’émet ni ne renouvelle aucun jeton. |
+| Microservices | Revalident le JWT, tirent le client de la claim `azp`, filtrent toutes les données par client et propagent le même jeton à leurs appels internes. |
+| Keycloak fourni | Émet les jetons des clients de démonstration (realm `candronex` importé au démarrage) et publie ses clés publiques (JWKS). |
+| Client B2B | Obtient un jeton par client credentials, l’envoie en `Authorization: Bearer` et le renouvelle avant son expiration. |
+
+@@ 5. Vue des blocs de construction — 4+1 : Logique et Développement
+Les chapitres 1 à 8 couvrent les sections Arc42 demandées. Les cinq vues 4+1 correspondent aux diagrammes et explications suivants.
+
+| Vue 4+1 | Section(s) | Diagrammes et contenu |
+|---:16|---:18|---:66|
+| Logique | §3.3, §5.1, §5.2 | Cartographie du domaine, décomposition en microservices, hexagones des trois services. |
+| Développement | §5.3 | Arborescence du dépôt, projets par couche, règles de dépendance. |
+| Processus | §6.1, §6.2 | Séquences du jeton et d’UC-02, d’UC-04 et d’UC-06 ; cycle de vie des éléments, demandes et services. |
+| Déploiement | §7.1 | Conteneurs Docker Compose, ports, réseau, volumes. |
+| Scénarios | §1.2, §6.1 | Cas d’utilisation de la Phase 2 et scénarios de référence, vérifiés par `scripts/tester-cas-attendus.sh` (§11). |
+
+@@ 5.1 Décomposition en microservices — vue Logique
+![Vue logique : microservices, bounded contexts, API exposées, bases propres et dépendances](../diagrammes/decomposition-logique.png)
+
+| Microservice | Bounded contexts | API | Base | Appelle |
+|---:22|---:20|---:26|---:14|---:18|
+| drone-management-service | Drones | `drone-management/v1` (publique), `identiteReseau` (interne) | `drone-db` | — |
+| service-ordering-service | Catalogue, Commandes | `service-catalog/v1`, `service-ordering/v1` (publiques) | `ordering-db` | drone-management-service, slice-service |
+| slice-service | Service Activation, Service Inventory | `service-inventory/v1` (publique), `service-activation/v1` (interne) | `slice-db` | drone-management-service ; réseau simulé par le port |
+
+Le découpage reprend la cartographie du §3.3. Chaque bounded context appartient à un seul service, et un service ne regroupe deux contextes que lorsqu’ils partagent une même transaction (Commandes avec Catalogue figé, Service Activation avec Service Inventory). ADR-001 consigne ce choix et les découpages écartés. Customer Management reste à l’extérieur, assuré par le Keycloak fourni.
+
+@@ 5.2 Structure interne d’un service — architecture hexagonale
+Les trois services ont la même structure en quatre projets. **Domain** contient les agrégats, objets valeur et règles, sans aucune dépendance. **Application** contient les services applicatifs, ainsi que les ports d’entrée et de sortie qu’ils définissent. **Infrastructure** contient les adaptateurs de sortie : PostgreSQL avec Npgsql, HTTP vers les autres services, réseau simulé et file en mémoire. **Api** contient les adaptateurs d’entrée REST et la composition. slice-service, qui porte UC-06, est détaillé ci-dessous.
+
+![Architecture hexagonale de slice-service : ports, adaptateurs et NetworkProvisioningPort](../diagrammes/hexagone-slice-service.png)
+
+| Élément | Rôle dans slice-service |
+|---:28|---:72|
+| `ActivationController`, `ServiceInventoryController` | Adaptateurs d’entrée REST : DTO, validation, codes HTTP. Ils appellent les ports `IReceptionActivations` et `IConsultationInventaire`. |
+| `ProcesseurActivations` | Adaptateur d’entrée en arrière-plan (`BackgroundService`) : il lit la file et appelle `ITraitementActivations`, jusqu’à 500 activations simultanées ; au démarrage, il relit les demandes `RECUE`. |
+| `ReceptionActivations` | Vérifie l’idempotence, résout l’IMSI, valide la `ConfigurationSlice`, enregistre la demande et le service en une transaction, puis met la demande en file. |
+| `TraitementActivations` | Appelle le `NetworkProvisioningPort` avec un délai maximal, puis enregistre `REUSSIE` et `ACTIF`, ou `ECHOUEE` et `EN_ECHEC`, en une transaction. |
+| Domaine | `DemandeActivation`, `ConfigurationSlice` (S-NSSAI = sst + sd, DNN, 5QI), `Imsi`, `Service` et `EtatService` ; transitions et invariants, sans aucune référence technique. |
+| Ports de sortie | `IActivationRepository` et `IInventaireRepository`, `IResolutionIdentiteReseau`, `INetworkProvisioningPort`, `IFileActivations`. |
+| Adaptateurs de sortie | `ActivationRepositorySql` (Npgsql), `ResolutionIdentiteReseauHttp` (jeton propagé, résilience), `MockOpen5GSAdapter`, `FileActivationsEnMemoire` (Channel). |
+
+**NetworkProvisioningPort.** Le port est défini par l’application, dans les termes du domaine :
+
+```
+public interface INetworkProvisioningPort
+{
+    // Associe la slice au profil de l'abonné. Idempotent ; un délai dépassé
+    // se signale par l'annulation du jeton d'annulation.
+    Task<ResultatProvisionnement> ConfigurerSliceAsync(
+        Imsi imsi, ConfigurationSlice configuration, CancellationToken ct);
+}
+```
+
+Le `MockOpen5GSAdapter` simule le cœur 5G. Il attend une latence tirée uniformément entre `MockOpen5GS__LatenceMinMs` et `MockOpen5GS__LatenceMaxMs` (300 et 1500 ms par défaut), puis refuse la configuration avec la probabilité `MockOpen5GS__TauxEchec` (0 par défaut, cause `ECHEC_SIMULE`). Il garde en mémoire les slices associées à chaque IMSI : rejouer une configuration déjà appliquée réussit sans créer de seconde association. Le futur `Open5GSAdapter` implémentera la même interface ; le remplacement se limite à l’enregistrement de l’adaptateur dans `InfrastructureExtensions`, sans modifier le domaine ni l’application (ADR-002).
+
+Les deux autres services suivent le même modèle, avec moins d’adaptateurs.
+
+![Architecture hexagonale de drone-management-service et de service-ordering-service](../diagrammes/hexagones-drone-ordering.png)
+
+Dans service-ordering-service, `GestionCommandes` dépend de quatre ports de sortie : `ICommandeRepository`, `ICatalogueRepository`, `IRegistreDrones` (vérification du drone) et `IActivationServices` (demande et suivi des activations). Les deux derniers sont implémentés par des adaptateurs HTTP : l’agrégat `Commande` ne sait pas que les drones et les activations sont dans d’autres services. drone-management-service n’a qu’un port de sortie (`IDroneRepository`), car il n’appelle aucun service.
+
+@@ 5.3 Organisation du code — vue Développement
+Le code est dans un seul dépôt et une seule solution (`CanDroneX.sln`). Chaque microservice a son propre dossier, son Dockerfile et son script de base de données, et se construit et se déploie seul.
+
+```
+CanDroneX/
+├─ CanDroneX.sln, Directory.Build.props, Directory.Packages.props
+├─ docker-compose.yml, .env.example, krakend/, keycloak/
+├─ services/
+│  ├─ drone-management-service/
+│  │  ├─ src/   DroneManagement.{Domain, Application, Infrastructure, Api}
+│  │  ├─ tests/ DroneManagement.{Domain, Application, Infrastructure, Api}.Tests
+│  │  ├─ db/init.sql, Dockerfile
+│  ├─ service-ordering-service/   (même structure, ServiceOrdering.*)
+│  └─ slice-service/              (même structure, SliceService.*, db/mesures/)
+├─ tests/Contrats.Tests            (assemble le contrat de la passerelle)
+├─ load-tests/                     (k6, analyse, résultats)
+├─ scripts/                        (démonstration, cas attendus, export des contrats)
+└─ docs/                           (openapi/, diagrammes/, rapport/, décisions, mesures)
+```
+
+| Projet | Peut référencer | Contenu |
+|---:20|---:28|---:52|
+| `*.Domain` | rien (aucun paquet NuGet) | Agrégats, objets valeur, états et exceptions métier. |
+| `*.Application` | Domain | Services applicatifs, ports d’entrée et de sortie, commandes et résultats. |
+| `*.Infrastructure` | Application (et Domain) ; Npgsql, résilience HTTP | DAO et dépôts SQL, clients HTTP, adaptateur réseau, file et processeur. |
+| `*.Api` | Application, Infrastructure | Contrôleurs et DTO, sécurité JWT, corrélation et journaux, erreurs, OpenAPI ; composition dans `Program.cs`. |
+| `*.Tests` | la couche testée | Tests unitaires (Domain, Application) et d’intégration (Infrastructure avec Testcontainers, Api avec WebApplicationFactory). |
+
+**Règles imposées par le code.**
+
+- Le sens des dépendances est fixé par les références de projet. Le projet Domain n’en a aucune, ni vers un projet ni vers un paquet : y utiliser ASP.NET Core ou Npgsql ne compile pas. Les avertissements sont traités comme des erreurs (`TreatWarningsAsErrors`), et les versions des paquets sont centralisées dans `Directory.Packages.props`.
+- Aucun projet n’est partagé entre services, et aucun service ne référence un projet d’un autre service. Le code transversal (sécurité, corrélation, erreurs, conventions OpenAPI) est copié dans chaque service : on accepte cette duplication pour qu’un service évolue et se déploie sans les autres.
+- Les entités internes ne traversent pas les frontières. Un service ne connaît d’un autre que le contrat de son API, au travers de ses propres DTO, et les identifiants circulent sous forme d’UUID.
+
+@@ 6. Vue d’exécution — 4+1 : Processus
+Cette vue suit un appel B2B de bout en bout, de l’obtention du jeton à l’activation des deux slices du drone DRN-0231, puis le cycle de vie des objets qui portent l’état. Les numéros des diagrammes renvoient aux étapes citées dans le texte.
+
+@@ 6.1 Scénarios de référence
+## Jeton, puis UC-02 par la passerelle
+
+![Obtention du jeton auprès du Keycloak fourni, puis UC-02 par la passerelle, avec les refus](../diagrammes/sequence-jeton-uc02.png)
+
+Le client obtient un jeton auprès de Keycloak (étapes 1-2), puis appelle la passerelle (3). La passerelle valide le jeton (4) et transmet l’`Authorization` tel quel (5). drone-management-service revalide le jeton et prend le client dans `azp` (6). Il vérifie ensuite l’unicité de l’IMSI et de l’identifiant métier (7-8), puis enregistre le drone pour ce client (9). La réponse `201` ne contient pas l’IMSI (10-11).
+
+## UC-04 puis UC-06 : commande C2 et Imagerie
+
+![UC-04 puis UC-06 (1/2) : prise de commande et demandes d’activation](../diagrammes/sequence-uc04-commande.png)
+
+service-ordering-service vérifie d’abord la clé d’idempotence (3), puis le drone auprès de drone-management-service, avec le jeton du client (4-5). Il fige alors l’offre dans chaque élément et enregistre la commande avec `acceptedAt` (6). Il demande ensuite l’activation des deux éléments en parallèle (7). Pour chacun, slice-service vérifie l’idempotence par `elementId` (8), résout l’IMSI (9-10), enregistre la demande `RECUE` et le service `EN_ACTIVATION`, puis met la demande en file (11) et répond `202` (12). Le client reçoit `201` avec l’état `EN_COURS` (14-15).
+
+![UC-06 (2/2) : activation en arrière-plan, suivi de la commande, échecs et reprises](../diagrammes/sequence-uc06-activation.png)
+
+En arrière-plan, le processeur appelle le mock par le `NetworkProvisioningPort` (1-2). Selon la réponse, il enregistre `REUSSIE` et `ACTIF` avec `activatedAt`, ou `ECHOUEE` et `EN_ECHEC` avec la cause (3-6). Quand le client suit sa commande (7-8), service-ordering-service relit les activations (9-10) et recalcule l’état global (11). Le client voit `COMPLETEE`, `PARTIELLE` (C2 actif, Imagerie en échec) ou `ECHOUEE` (12-13).
+
+## Refus et défaillances démontrés
+
+| Cas | Où le refus se produit | Réponse |
+|---:30|---:28|---:42|
+| Sans jeton, jeton expiré, mal signé, d’un autre émetteur ou sans audience | Passerelle (puis le service, s’il est appelé directement) | `401`, la requête n’atteint pas le service. |
+| Jeton valide d’`aerotech-demo` sur un drone d’`inspectra-demo` | drone-management-service (filtre `client_id`) | `404`, comme pour un drone inexistant ; refus journalisé. |
+| Commande pour le drone d’un autre client | service-ordering-service (drone introuvable avec le jeton du client) | `422`, rien n’est enregistré. |
+| IMSI déjà associée | drone-management-service (unicité) | `409`, sans révéler le propriétaire. |
+| drone-management-service injoignable à la commande | service-ordering-service | `503`, rien n’est enregistré ; rejeu avec la même clé. |
+| slice-service injoignable à la commande | service-ordering-service | `201`, éléments `EN_ATTENTE`, relancés au suivi ou au rejeu. |
+| Réseau qui refuse (`MOCK_TAUX_ECHEC=1`) | slice-service, en arrière-plan | Éléments `EN_ECHEC` avec la cause, commande `ECHOUEE`. |
+| slice-service redémarré pendant une activation | slice-service, au démarrage | Les demandes `RECUE` sont relues et rejouées sans doublon. |
+
+@@ 6.2 Cycle de vie d’une commande et d’une activation
+![Cycle de vie de l’élément de commande, de la demande d’activation et du service d’inventaire](../diagrammes/cycle-de-vie.png)
+
+Trois objets portent l’état, chacun dans le service qui en est propriétaire. L’**élément de commande** (service-ordering-service) suit la commande du point de vue du client. La **demande d’activation** (slice-service) suit le traitement réseau. Le **service d’inventaire** (slice-service) décrit la slice telle que CanDroneX la connaît.
+
+| État de l’élément | Signification | Transition suivante |
+|---:20|---:44|---:36|
+| `EN_ATTENTE` | Commande acceptée (`acceptedAt`), activation pas encore acceptée par slice-service. | `EN_ACTIVATION` dès que slice-service répond `202` ou `200`. |
+| `EN_ACTIVATION` | Demande acceptée par slice-service, traitement réseau en cours. | `ACTIF` ou `EN_ECHEC`, relu au suivi. |
+| `ACTIF` | Slice configurée ; `activatedAt` copié de l’inventaire. | `COMPENSE` à l’annulation (UC-15, Phase 3). |
+| `EN_ECHEC` | Le réseau a refusé, a dépassé le délai ou était injoignable ; cause conservée. | `EN_ACTIVATION` à la reprise (UC-10, Phase 3). |
+| `ANNULE`, `COMPENSE` | Modélisés dans le domaine, déclenchés en Phase 3. | — |
+
+**Horodatages.** `acceptedAt` est fixé par service-ordering-service quand la commande est enregistrée, puis transmis à slice-service avec la demande. `activatedAt` est fixé par slice-service dans la transaction qui passe le service à `ACTIF`. Les deux valeurs sont dans `slice-db`, ce qui permet de calculer le P95 du délai d’activation en une requête SQL (§11). La demande ne passe à `EN_COURS` qu’en mémoire, quand le processeur la prend dans la file : cet état n’est pas écrit en base, ce qui économise une écriture par activation (ADR-005).
+
+**État global de la commande.** Il n’est pas stocké : l’agrégat `Commande` le calcule à partir de ses éléments, en évaluant les règles dans l’ordre suivant.
+
+1. Tous les éléments `EN_ATTENTE` : `RECUE`.
+2. Tous les éléments `ANNULE` ou `COMPENSE` : `ANNULEE`.
+3. Au moins un élément `EN_ATTENTE` ou `EN_ACTIVATION` : `EN_COURS`.
+4. Au moins un `ACTIF` et au moins un `EN_ECHEC` : `PARTIELLE`.
+5. Aucun `ACTIF` et au moins un `EN_ECHEC` : `ECHOUEE`.
+6. Sinon (tous les éléments terminés sont `ACTIF`) : `COMPLETEE`.
+
+**Résultats partiels.** Les deux activations sont indépendantes. Si C2 est actif et qu’Imagerie échoue, la commande est `PARTIELLE`, et non `ECHOUEE` : le lien C2 actif est l’information critique pour l’exploitant, et chaque élément garde son propre état et sa cause.
+
+**Échecs simulés.** `MOCK_TAUX_ECHEC` règle la proportion de refus du mock (0 par défaut, 1 pour démontrer l’échec). Un délai réseau de plus de 5 s donne `DELAI_DEPASSE`, et une erreur de l’adaptateur `RESEAU_INJOIGNABLE`. Dans tous les cas, la demande passe à `ECHOUEE` et le service à `EN_ECHEC` dans la même transaction.
+
+**Répétitions et doublons.** Une même demande peut être répétée à quatre niveaux, et chacun est idempotent :
+
+- le client rejoue la commande avec la même clé : la commande existante est renvoyée ;
+- service-ordering-service relance la demande d’un élément `EN_ATTENTE` : l’`elementId` unique renvoie la demande existante ;
+- slice-service redémarre et rejoue les demandes `RECUE` : le mock n’associe pas deux fois la même slice ;
+- deux suivis concurrents mettent à jour le même élément : `rang_etat` empêche tout retour en arrière.
+
+Le scénario de rejeu des tests d’intégration vérifie qu’il n’y a ni commande, ni demande, ni association réseau en double.
+
+@@ 7. Vue de déploiement — 4+1
+Cette vue montre le système exécuté localement avec Docker Compose (`docker-compose.yml`) pour la Phase 2 : dix conteneurs, dont k6 qui n’est lancé que pour les mesures.
+
+@@ 7.1 Topologie de déploiement
+![Vue de déploiement Docker Compose : conteneurs, ports publiés, réseau et volumes](../diagrammes/deploiement.png)
+
+| Conteneur | Image | Port publié sur l’hôte | Volume |
+|---:24|---:32|---:22|---:22|
+| `api-gateway` | `devopsfaith/krakend:2.7.2` | `${GATEWAY_PORT:-8080}` → 8080 | `krakend.json` (lecture seule) |
+| `keycloak` | `quay.io/keycloak/keycloak:26.0` | 8081 → 8080 | `realm-candronex.json` importé |
+| `swagger-ui` | `swaggerapi/swagger-ui:v5.32.15` | `${SWAGGER_UI_PORT:-8082}` → 8080 | `docs/openapi` (lecture seule) |
+| `drone-management-service` | construite (`services/drone-management-service/Dockerfile`) | aucun | — |
+| `service-ordering-service` | construite | aucun | — |
+| `slice-service` | construite ; `MockOpen5GSAdapter` interne | aucun | — |
+| `drone-db`, `ordering-db`, `slice-db` | `postgres:16-alpine` | aucun | `drone-db-data`, `ordering-db-data`, `slice-db-data` ; `db/init.sql` au premier démarrage |
+| `k6` (profil `charge`) | `grafana/k6:0.54.0` | aucun | `load-tests/` (scripts et résultats) |
+
+**Réseau.** Tous les conteneurs sont sur le réseau par défaut du projet (`candronex_default`) et se joignent par leur nom de service. Seuls la passerelle, Keycloak et Swagger UI publient un port. Les microservices et les bases ne sont pas joignables depuis l’hôte, ce que vérifie le script des cas attendus.
+
+**Démarrage ordonné.** Chaque service attend que sa base soit saine (`pg_isready`). La passerelle attend que Keycloak soit sain (`/health/ready`).
+
+| Variable (services) | Rôle |
+|---:36|---:64|
+| `ConnectionStrings__Drones`, `__ServiceOrdering`, `__Slices` | Base propre du service (`Maximum Pool Size=80`) ; mot de passe tiré de `.env`. |
+| `Jwt__Emetteur`, `Jwt__Audience`, `Jwt__JwksUrl` | Contrat du jeton : `http://localhost:8081/realms/candronex`, `candronex-api`, clés sur `keycloak:8080`. |
+| `ServicesDistants__DroneManagementUrl`, `__SliceServiceUrl` | Adresses internes des services appelés. |
+| `MockOpen5GS__LatenceMinMs`, `__LatenceMaxMs`, `__TauxEchec` | Réseau simulé, alimentées par `MOCK_LATENCE_MIN_MS` (300), `MOCK_LATENCE_MAX_MS` (1500) et `MOCK_TAUX_ECHEC` (0). |
+| `Activation__DelaiMaxReseau`, `Processeur__ConcurrenceMax` | Délai maximal d’une configuration réseau (5 s) et activations simultanées (500). |
+| `.env` (non versionné) | Secrets : administrateur Keycloak, secrets des clients de démonstration, mots de passe des bases ; `GATEWAY_PORT`. Le gabarit `.env.example` en donne la liste. |
+
+@@ 7.2 Démarrage et données de démonstration
+Il suffit d’avoir Docker Desktop et un fichier `.env`. Le realm `candronex` et ses clients sont importés au démarrage de Keycloak : aucune configuration manuelle n’est nécessaire.
+
+```
+cp .env.example .env              # puis remplacer chaque valeur
+docker compose up --build -d      # construire et démarrer
+docker compose ps                 # attendre que keycloak soit « healthy »
+docker compose down               # arrêter (données conservées)
+docker compose down -v            # arrêter et réinitialiser les bases
+```
+
+**Données de démonstration.** Les scripts `db/init.sql` créent les schémas et chargent, au premier démarrage, le drone DRN-0231 d’`inspectra-demo` (`droneId` `00000000-0000-0000-0000-000000000231`, SIM), le drone AT-0500 d’`aerotech-demo` (eSIM) et les deux offres du catalogue avec leurs sept caractéristiques. `docker compose down -v` efface les volumes : les données de démonstration sont rechargées au démarrage suivant.
+
+**Obtenir un jeton et appeler la passerelle.**
+
+```
+TOKEN=$(curl -s -X POST http://localhost:8081/realms/candronex/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=inspectra-demo -d client_secret=$INSPECTRA_DEMO_SECRET \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s http://localhost:8080/api/drone-management/v1/drone -H "Authorization: Bearer $TOKEN"
+curl -s "http://localhost:8080/api/service-inventory/v1/service?droneId=00000000-0000-0000-0000-000000000231" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Vérifier l’état.** `docker compose ps` montre l’état des conteneurs. Les journaux JSON se suivent avec `docker compose logs -f`, et une commande se retrouve dans tous les services par son `commandeId`. Deux scripts rejouent les scénarios par la passerelle : `scripts/demo-bout-en-bout.sh` (UC-02, UC-04 puis UC-06, jusqu’à l’état actif) et `scripts/tester-cas-attendus.sh` (54 cas, §11). Pour démontrer l’échec, on redémarre slice-service avec `MOCK_TAUX_ECHEC=1 docker compose up -d slice-service`.

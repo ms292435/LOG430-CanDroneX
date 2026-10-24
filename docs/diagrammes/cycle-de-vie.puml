@@ -1,0 +1,41 @@
+@startuml cycle-de-vie
+!include commun.iuml
+title Cycle de vie : élément de commande, demande d'activation et service d'inventaire
+
+state "Élément de commande (service-ordering-service)" as Element {
+  [*] --> EN_ATTENTE : commande acceptée\n(acceptedAt)
+  EN_ATTENTE --> EN_ACTIVATION : slice-service a accepté\nla demande (202)
+  EN_ACTIVATION --> ACTIF : activation REUSSIE\n(activatedAt)
+  EN_ACTIVATION --> EN_ECHEC : activation ECHOUEE\n(cause)
+  EN_ATTENTE --> ANNULE : annulation (UC-15)
+  ACTIF --> COMPENSE : annulation (UC-15)
+  EN_ATTENTE : slice-service indisponible :\nrelancé au GET ou au rejeu
+  EN_ECHEC --> EN_ACTIVATION : reprise (UC-10, Phase 3)
+}
+
+state "Demande d'activation (slice-service)" as Demande {
+  [*] --> RECUE : POST activation (202)
+  RECUE --> EN_COURS : sortie de la file\n(non persisté)
+  EN_COURS --> REUSSIE : réseau confirme
+  EN_COURS --> ECHOUEE : refus, délai dépassé,\nréseau injoignable
+  RECUE : reprise au démarrage
+}
+
+state "Service d'inventaire (slice-service)" as Service {
+  state "EN_ACTIVATION" as S_EN_ACTIVATION
+  state "ACTIF" as S_ACTIF
+  state "EN_ECHEC" as S_EN_ECHEC
+  [*] --> S_EN_ACTIVATION : créé avec la demande
+  S_EN_ACTIVATION --> S_ACTIF : demande REUSSIE\n(activatedAt)
+  S_EN_ACTIVATION --> S_EN_ECHEC : demande ECHOUEE
+}
+
+legend bottom
+  **Légende**
+  rectangle arrondi : état ; flèche pleine : transition, avec son déclencheur
+  point noir : création ; texte dans un état : comportement associé
+  ANNULE, COMPENSE et la reprise depuis EN_ECHEC sont modélisés dans le domaine
+  mais déclenchés en Phase 3 (UC-10, UC-15). L'élément suit le service d'inventaire :
+  la commande relit l'état chez slice-service et ne le fait jamais reculer.
+endlegend
+@enduml

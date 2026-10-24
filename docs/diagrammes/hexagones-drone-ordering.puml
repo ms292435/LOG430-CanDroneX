@@ -1,0 +1,53 @@
+@startuml hexagones-drone-ordering
+!include commun.iuml
+title Architecture hexagonale — drone-management-service et service-ordering-service
+left to right direction
+
+package "drone-management-service" as SDrone {
+  component "DroneController\n(api/drone-management/v1)" as CtrlDrone
+  interface "IGestionDrones" as PGestionDrones
+  component "GestionDrones" as AppDrone
+  component "Domaine : Drone, DroneId,\nIdentifiantMetier, IdentiteReseau, Imsi" as DomDrone #FFFFFF
+  interface "IDroneRepository" as PDroneRepo
+  component "DroneRepositorySql\nDroneDao (Npgsql)" as SqlDrone
+}
+
+package "service-ordering-service" as SOrdering {
+  component "ServiceOrderController\nServiceSpecificationController" as CtrlOrdering
+  interface "IGestionCommandes\nIConsultationCatalogue" as PGestionCommandes
+  component "GestionCommandes\nConsultationCatalogue" as AppOrdering
+  component "Domaine : Commande, ElementDeCommande,\nServiceSpecification, Caracteristique" as DomOrdering #FFFFFF
+  interface "ICommandeRepository\nICatalogueRepository" as POrderingRepo
+  interface "IRegistreDrones" as PRegistre
+  interface "IActivationServices" as PActivation
+  component "CommandeRepositorySql\nCatalogueRepositorySql" as SqlOrdering
+  component "RegistreDronesHttp" as HttpDrone
+  component "ActivationServicesHttp" as HttpSlice
+}
+
+CtrlDrone --> PGestionDrones
+PGestionDrones -- AppDrone
+AppDrone --> DomDrone
+AppDrone --> PDroneRepo
+SqlDrone ..|> PDroneRepo
+
+CtrlOrdering --> PGestionCommandes
+PGestionCommandes -- AppOrdering
+AppOrdering --> DomOrdering
+AppOrdering --> POrderingRepo
+AppOrdering --> PRegistre
+AppOrdering --> PActivation
+SqlOrdering ..|> POrderingRepo
+HttpDrone ..|> PRegistre
+HttpSlice ..|> PActivation
+
+legend right
+  **Légende**
+  rond : port défini par l'application ; cadre blanc : domaine
+  (aucune dépendance vers un framework ou une technologie)
+  flèche pleine : dépendance d'utilisation
+  flèche pointillée à pointe creuse : l'adaptateur implémente le port
+  à gauche les adaptateurs d'entrée (REST), à droite ceux de sortie
+  (PostgreSQL, REST vers les autres services avec jeton propagé)
+endlegend
+@enduml
