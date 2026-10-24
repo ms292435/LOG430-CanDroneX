@@ -128,7 +128,7 @@ public sealed class ActivationsTests
         Assert.NotNull(service.ActivatedAt);
         Assert.True(service.ActivatedAt >= demande.AcceptedAt);
         Assert.Equal(1, _reseau.Appels);
-        Assert.Equal(2, _activations.Enregistrements); // en cours, puis résultat (demande et service ensemble)
+        Assert.Equal(1, _activations.Enregistrements); // une seule écriture : le résultat (demande et service ensemble)
     }
 
     [Fact]

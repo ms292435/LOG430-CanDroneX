@@ -1,0 +1,469 @@
+ Container candronex-k6-run-904bc854aa75 Creating 
+ Container candronex-k6-run-904bc854aa75 Created 
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: /scripts/charge-phase2.js
+        output: -
+
+     scenarios: (100.00%) 6 scenarios, 3600 max VUs, 1m20s max duration (incl. graceful stop):
+              * commande_montee: Up to 180.00 iterations/s for 20s over 1 stages (maxVUs: 180-540, exec: commande, gracefulStop: 30s)
+              * consultation_montee: Up to 360.00 iterations/s for 20s over 1 stages (maxVUs: 360-1080, exec: consultation, gracefulStop: 30s)
+              * enregistrement_montee: Up to 60.00 iterations/s for 20s over 1 stages (maxVUs: 60-180, exec: enregistrement, gracefulStop: 30s)
+              * commande_plateau: 180.00 iterations/s for 30s (maxVUs: 180-540, exec: commande, startTime: 20s, gracefulStop: 30s)
+              * consultation_plateau: 360.00 iterations/s for 30s (maxVUs: 360-1080, exec: consultation, startTime: 20s, gracefulStop: 30s)
+              * enregistrement_plateau: 60.00 iterations/s for 30s (maxVUs: 60-180, exec: enregistrement, startTime: 20s, gracefulStop: 30s)
+
+
+Run                      [ 100% ] setup()
+commande_montee          [   0% ]
+consultation_montee      [   0% ]
+enregistrement_montee    [   0% ]
+commande_plateau         [   0% ]
+consultation_plateau     [   0% ]
+enregistrement_plateau   [   0% ]
+
+Run                      [ 100% ] setup()
+commande_montee          [   0% ]
+consultation_montee      [   0% ]
+enregistrement_montee    [   0% ]
+commande_plateau         [   0% ]
+consultation_plateau     [   0% ]
+enregistrement_plateau   [   0% ]
+
+running (0m02.8s), 0000/1200 VUs, 4 complete and 0 interrupted iterations
+commande_montee          [   3% ] 000/180 VUs    00.6s/20s  005.12 iters/s
+consultation_montee      [   3% ] 0000/0360 VUs  00.6s/20s  011.20 iters/s
+enregistrement_montee    [   3% ] 000/060 VUs    00.6s/20s  01.22 iters/s
+commande_plateau       • [   0% ] waiting        19.4s     
+consultation_plateau   • [   0% ] waiting        19.4s     
+enregistrement_plateau • [   0% ] waiting        19.4s     
+
+running (0m03.8s), 0000/1200 VUs, 37 complete and 0 interrupted iterations
+commande_montee          [   8% ] 000/180 VUs    01.6s/20s  014.38 iters/s
+consultation_montee      [   8% ] 0000/0360 VUs  01.6s/20s  029.08 iters/s
+enregistrement_montee    [   8% ] 000/060 VUs    01.6s/20s  04.57 iters/s
+commande_plateau       • [   0% ] waiting        18.4s     
+consultation_plateau   • [   0% ] waiting        18.4s     
+enregistrement_plateau • [   0% ] waiting        18.4s     
+
+running (0m04.8s), 0002/1200 VUs, 101 complete and 0 interrupted iterations
+commande_montee          [  13% ] 001/180 VUs    02.6s/20s  023.81 iters/s
+consultation_montee      [  13% ] 0001/0360 VUs  02.6s/20s  047.43 iters/s
+enregistrement_montee    [  13% ] 000/060 VUs    02.6s/20s  07.94 iters/s
+commande_plateau       • [   0% ] waiting        17.4s     
+consultation_plateau   • [   0% ] waiting        17.4s     
+enregistrement_plateau • [   0% ] waiting        17.4s     
+
+running (0m05.8s), 0001/1200 VUs, 195 complete and 0 interrupted iterations
+commande_montee          [  18% ] 001/180 VUs    03.6s/20s  032.73 iters/s
+consultation_montee      [  18% ] 0000/0360 VUs  03.6s/20s  065.31 iters/s
+enregistrement_montee    [  18% ] 000/060 VUs    03.6s/20s  10.82 iters/s
+commande_plateau       • [   0% ] waiting        16.4s     
+consultation_plateau   • [   0% ] waiting        16.4s     
+enregistrement_plateau • [   0% ] waiting        16.4s     
+
+running (0m06.8s), 0001/1200 VUs, 319 complete and 0 interrupted iterations
+commande_montee          [  23% ] 001/180 VUs    04.6s/20s  041.68 iters/s
+consultation_montee      [  23% ] 0000/0360 VUs  04.6s/20s  083.25 iters/s
+enregistrement_montee    [  23% ] 000/060 VUs    04.6s/20s  13.96 iters/s
+commande_plateau       • [   0% ] waiting        15.4s     
+consultation_plateau   • [   0% ] waiting        15.4s     
+enregistrement_plateau • [   0% ] waiting        15.4s     
+
+running (0m07.8s), 0001/1200 VUs, 472 complete and 0 interrupted iterations
+commande_montee          [  28% ] 001/180 VUs    05.6s/20s  050.65 iters/s
+consultation_montee      [  28% ] 0000/0360 VUs  05.6s/20s  101.20 iters/s
+enregistrement_montee    [  28% ] 000/060 VUs    05.6s/20s  16.88 iters/s
+commande_plateau       • [   0% ] waiting        14.4s     
+consultation_plateau   • [   0% ] waiting        14.4s     
+enregistrement_plateau • [   0% ] waiting        14.4s     
+
+running (0m08.8s), 0002/1200 VUs, 655 complete and 0 interrupted iterations
+commande_montee          [  33% ] 001/180 VUs    06.6s/20s  059.62 iters/s
+consultation_montee      [  33% ] 0001/0360 VUs  06.6s/20s  119.32 iters/s
+enregistrement_montee    [  33% ] 000/060 VUs    06.6s/20s  19.82 iters/s
+commande_plateau       • [   0% ] waiting        13.4s     
+consultation_plateau   • [   0% ] waiting        13.4s     
+enregistrement_plateau • [   0% ] waiting        13.4s     
+
+running (0m09.8s), 0002/1200 VUs, 869 complete and 0 interrupted iterations
+commande_montee          [  38% ] 001/180 VUs    07.6s/20s  068.61 iters/s
+consultation_montee      [  38% ] 0001/0360 VUs  07.6s/20s  137.28 iters/s
+enregistrement_montee    [  38% ] 000/060 VUs    07.6s/20s  22.91 iters/s
+commande_plateau       • [   0% ] waiting        12.4s     
+consultation_plateau   • [   0% ] waiting        12.4s     
+enregistrement_plateau • [   0% ] waiting        12.4s     
+
+running (0m10.8s), 0001/1200 VUs, 1113 complete and 0 interrupted iterations
+commande_montee          [  43% ] 001/180 VUs    08.6s/20s  077.60 iters/s
+consultation_montee      [  43% ] 0000/0360 VUs  08.6s/20s  155.25 iters/s
+enregistrement_montee    [  43% ] 000/060 VUs    08.6s/20s  25.86 iters/s
+commande_plateau       • [   0% ] waiting        11.4s     
+consultation_plateau   • [   0% ] waiting        11.4s     
+enregistrement_plateau • [   0% ] waiting        11.4s     
+
+running (0m11.8s), 0003/1200 VUs, 1386 complete and 0 interrupted iterations
+commande_montee          [  48% ] 002/180 VUs    09.6s/20s  086.69 iters/s
+consultation_montee      [  48% ] 0000/0360 VUs  09.6s/20s  173.22 iters/s
+enregistrement_montee    [  48% ] 001/060 VUs    09.6s/20s  28.93 iters/s
+commande_plateau       • [   0% ] waiting        10.4s     
+consultation_plateau   • [   0% ] waiting        10.4s     
+enregistrement_plateau • [   0% ] waiting        10.4s     
+
+running (0m12.8s), 0004/1200 VUs, 1689 complete and 0 interrupted iterations
+commande_montee          [  53% ] 003/180 VUs    10.6s/20s  095.67 iters/s
+consultation_montee      [  53% ] 0001/0360 VUs  10.6s/20s  191.30 iters/s
+enregistrement_montee    [  53% ] 000/060 VUs    10.6s/20s  31.89 iters/s
+commande_plateau       • [   0% ] waiting        09.4s     
+consultation_plateau   • [   0% ] waiting        09.4s     
+enregistrement_plateau • [   0% ] waiting        09.4s     
+
+running (0m13.8s), 0006/1200 VUs, 2020 complete and 0 interrupted iterations
+commande_montee          [  58% ] 004/180 VUs    11.6s/20s  104.66 iters/s
+consultation_montee      [  58% ] 0002/0360 VUs  11.6s/20s  209.27 iters/s
+enregistrement_montee    [  58% ] 000/060 VUs    11.6s/20s  34.86 iters/s
+commande_plateau       • [   0% ] waiting        08.4s     
+consultation_plateau   • [   0% ] waiting        08.4s     
+enregistrement_plateau • [   0% ] waiting        08.4s     
+
+running (0m14.8s), 0003/1200 VUs, 2387 complete and 0 interrupted iterations
+commande_montee          [  63% ] 002/180 VUs    12.6s/20s  113.64 iters/s
+consultation_montee      [  63% ] 0001/0360 VUs  12.6s/20s  227.25 iters/s
+enregistrement_montee    [  63% ] 000/060 VUs    12.6s/20s  37.91 iters/s
+commande_plateau       • [   0% ] waiting        07.4s     
+consultation_plateau   • [   0% ] waiting        07.4s     
+enregistrement_plateau • [   0% ] waiting        07.4s     
+
+running (0m15.8s), 0003/1200 VUs, 2781 complete and 0 interrupted iterations
+commande_montee          [  68% ] 002/180 VUs    13.6s/20s  122.63 iters/s
+consultation_montee      [  68% ] 0001/0360 VUs  13.6s/20s  245.30 iters/s
+enregistrement_montee    [  68% ] 000/060 VUs    13.6s/20s  40.88 iters/s
+commande_plateau       • [   0% ] waiting        06.4s     
+consultation_plateau   • [   0% ] waiting        06.4s     
+enregistrement_plateau • [   0% ] waiting        06.4s     
+
+running (0m16.8s), 0021/1200 VUs, 3187 complete and 0 interrupted iterations
+commande_montee          [  73% ] 015/180 VUs    14.6s/20s  131.62 iters/s
+consultation_montee      [  73% ] 0004/0360 VUs  14.6s/20s  263.28 iters/s
+enregistrement_montee    [  73% ] 002/060 VUs    14.6s/20s  43.92 iters/s
+commande_plateau       • [   0% ] waiting        05.4s     
+consultation_plateau   • [   0% ] waiting        05.4s     
+enregistrement_plateau • [   0% ] waiting        05.4s     
+
+running (0m17.8s), 0007/1200 VUs, 3655 complete and 0 interrupted iterations
+commande_montee          [  78% ] 005/180 VUs    15.6s/20s  140.68 iters/s
+consultation_montee      [  78% ] 0002/0360 VUs  15.6s/20s  281.27 iters/s
+enregistrement_montee    [  78% ] 000/060 VUs    15.6s/20s  46.89 iters/s
+commande_plateau       • [   0% ] waiting        04.4s     
+consultation_plateau   • [   0% ] waiting        04.4s     
+enregistrement_plateau • [   0% ] waiting        04.4s     
+
+running (0m18.8s), 0006/1200 VUs, 4140 complete and 0 interrupted iterations
+commande_montee          [  83% ] 004/180 VUs    16.6s/20s  149.67 iters/s
+consultation_montee      [  83% ] 0002/0360 VUs  16.6s/20s  299.31 iters/s
+enregistrement_montee    [  83% ] 000/060 VUs    16.6s/20s  49.87 iters/s
+commande_plateau       • [   0% ] waiting        03.4s     
+consultation_plateau   • [   0% ] waiting        03.4s     
+enregistrement_plateau • [   0% ] waiting        03.4s     
+
+running (0m19.8s), 0015/1200 VUs, 4645 complete and 0 interrupted iterations
+commande_montee          [  88% ] 012/180 VUs    17.6s/20s  158.66 iters/s
+consultation_montee      [  88% ] 0002/0360 VUs  17.6s/20s  317.29 iters/s
+enregistrement_montee    [  88% ] 001/060 VUs    17.6s/20s  52.91 iters/s
+commande_plateau       • [   0% ] waiting        02.4s     
+consultation_plateau   • [   0% ] waiting        02.4s     
+enregistrement_plateau • [   0% ] waiting        02.4s     
+
+running (0m20.8s), 0022/1200 VUs, 5181 complete and 0 interrupted iterations
+commande_montee          [  93% ] 017/180 VUs    18.6s/20s  167.65 iters/s
+consultation_montee      [  93% ] 0004/0360 VUs  18.6s/20s  335.28 iters/s
+enregistrement_montee    [  93% ] 001/060 VUs    18.6s/20s  55.88 iters/s
+commande_plateau       • [   0% ] waiting        01.4s     
+consultation_plateau   • [   0% ] waiting        01.4s     
+enregistrement_plateau • [   0% ] waiting        01.4s     
+
+running (0m21.8s), 0022/1200 VUs, 5755 complete and 0 interrupted iterations
+commande_montee          [  98% ] 018/180 VUs    19.6s/20s  176.64 iters/s
+consultation_montee      [  98% ] 0003/0360 VUs  19.6s/20s  353.26 iters/s
+enregistrement_montee    [  98% ] 001/060 VUs    19.6s/20s  58.92 iters/s
+commande_plateau       • [   0% ] waiting        00.4s     
+consultation_plateau   • [   0% ] waiting        00.4s     
+enregistrement_plateau • [   0% ] waiting        00.4s     
+
+running (0m22.8s), 0048/1200 VUs, 6325 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [   2% ] 036/180 VUs    00.6s/30s  180.00 iters/s
+consultation_plateau     [   2% ] 0009/0360 VUs  00.6s/30s  360.00 iters/s
+enregistrement_plateau   [   2% ] 003/060 VUs    00.6s/30s  60.00 iters/s
+
+running (0m23.8s), 0012/1200 VUs, 6960 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [   5% ] 010/180 VUs    01.6s/30s  180.00 iters/s
+consultation_plateau     [   5% ] 0001/0360 VUs  01.6s/30s  360.00 iters/s
+enregistrement_plateau   [   5% ] 001/060 VUs    01.6s/30s  60.00 iters/s
+
+running (0m24.8s), 0020/1200 VUs, 7553 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [   9% ] 015/180 VUs    02.6s/30s  180.00 iters/s
+consultation_plateau     [   9% ] 0004/0360 VUs  02.6s/30s  360.00 iters/s
+enregistrement_plateau   [   9% ] 001/060 VUs    02.6s/30s  60.00 iters/s
+
+running (0m25.8s), 0098/1200 VUs, 8073 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  12% ] 063/180 VUs    03.6s/30s  180.00 iters/s
+consultation_plateau     [  12% ] 0028/0360 VUs  03.6s/30s  360.00 iters/s
+enregistrement_plateau   [  12% ] 007/060 VUs    03.6s/30s  60.00 iters/s
+
+running (0m26.8s), 0033/1200 VUs, 8739 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  15% ] 025/180 VUs    04.6s/30s  180.00 iters/s
+consultation_plateau     [  15% ] 0005/0360 VUs  04.6s/30s  360.00 iters/s
+enregistrement_plateau   [  15% ] 003/060 VUs    04.6s/30s  60.00 iters/s
+
+running (0m27.8s), 0025/1200 VUs, 9348 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  19% ] 018/180 VUs    05.6s/30s  180.00 iters/s
+consultation_plateau     [  19% ] 0006/0360 VUs  05.6s/30s  360.00 iters/s
+enregistrement_plateau   [  19% ] 001/060 VUs    05.6s/30s  60.00 iters/s
+
+running (0m28.8s), 0030/1200 VUs, 9942 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  22% ] 022/180 VUs    06.6s/30s  180.00 iters/s
+consultation_plateau     [  22% ] 0006/0360 VUs  06.6s/30s  360.00 iters/s
+enregistrement_plateau   [  22% ] 002/060 VUs    06.6s/30s  60.00 iters/s
+
+running (0m29.8s), 0029/1200 VUs, 10543 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  25% ] 021/180 VUs    07.6s/30s  180.00 iters/s
+consultation_plateau     [  25% ] 0006/0360 VUs  07.6s/30s  360.00 iters/s
+enregistrement_plateau   [  25% ] 002/060 VUs    07.6s/30s  60.00 iters/s
+
+running (0m30.8s), 0014/1200 VUs, 11159 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  29% ] 010/180 VUs    08.6s/30s  180.00 iters/s
+consultation_plateau     [  29% ] 0003/0360 VUs  08.6s/30s  360.00 iters/s
+enregistrement_plateau   [  29% ] 001/060 VUs    08.6s/30s  60.00 iters/s
+
+running (0m31.8s), 0017/1200 VUs, 11756 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  32% ] 012/180 VUs    09.6s/30s  180.00 iters/s
+consultation_plateau     [  32% ] 0004/0360 VUs  09.6s/30s  360.00 iters/s
+enregistrement_plateau   [  32% ] 001/060 VUs    09.6s/30s  60.00 iters/s
+
+running (0m32.8s), 0021/1200 VUs, 12352 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  35% ] 014/180 VUs    10.6s/30s  180.00 iters/s
+consultation_plateau     [  35% ] 0006/0360 VUs  10.6s/30s  360.00 iters/s
+enregistrement_plateau   [  35% ] 001/060 VUs    10.6s/30s  60.00 iters/s
+
+running (0m33.8s), 0031/1200 VUs, 12941 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  39% ] 025/180 VUs    11.6s/30s  180.00 iters/s
+consultation_plateau     [  39% ] 0006/0360 VUs  11.6s/30s  360.00 iters/s
+enregistrement_plateau   [  39% ] 001/060 VUs    11.6s/30s  60.00 iters/s
+
+running (0m34.8s), 0035/1200 VUs, 13537 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  42% ] 027/180 VUs    12.6s/30s  180.00 iters/s
+consultation_plateau     [  42% ] 0007/0360 VUs  12.6s/30s  360.00 iters/s
+enregistrement_plateau   [  42% ] 001/060 VUs    12.6s/30s  60.00 iters/s
+
+running (0m35.8s), 0014/1200 VUs, 14159 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  45% ] 010/180 VUs    13.6s/30s  180.00 iters/s
+consultation_plateau     [  45% ] 0003/0360 VUs  13.6s/30s  360.00 iters/s
+enregistrement_plateau   [  45% ] 001/060 VUs    13.6s/30s  60.00 iters/s
+
+running (0m36.8s), 0012/1200 VUs, 14762 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  49% ] 010/180 VUs    14.6s/30s  180.00 iters/s
+consultation_plateau     [  49% ] 0001/0360 VUs  14.6s/30s  360.00 iters/s
+enregistrement_plateau   [  49% ] 001/060 VUs    14.6s/30s  60.00 iters/s
+
+running (0m37.8s), 0012/1200 VUs, 15361 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  52% ] 008/180 VUs    15.6s/30s  180.00 iters/s
+consultation_plateau     [  52% ] 0003/0360 VUs  15.6s/30s  360.00 iters/s
+enregistrement_plateau   [  52% ] 001/060 VUs    15.6s/30s  60.00 iters/s
+
+running (0m38.8s), 0016/1200 VUs, 15957 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  55% ] 012/180 VUs    16.6s/30s  180.00 iters/s
+consultation_plateau     [  55% ] 0003/0360 VUs  16.6s/30s  360.00 iters/s
+enregistrement_plateau   [  55% ] 001/060 VUs    16.6s/30s  60.00 iters/s
+
+running (0m39.8s), 0026/1200 VUs, 16548 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  59% ] 019/180 VUs    17.6s/30s  180.00 iters/s
+consultation_plateau     [  59% ] 0006/0360 VUs  17.6s/30s  360.00 iters/s
+enregistrement_plateau   [  59% ] 001/060 VUs    17.6s/30s  60.00 iters/s
+
+running (0m40.8s), 0030/1200 VUs, 17142 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  62% ] 025/180 VUs    18.6s/30s  180.00 iters/s
+consultation_plateau     [  62% ] 0002/0360 VUs  18.6s/30s  360.00 iters/s
+enregistrement_plateau   [  62% ] 003/060 VUs    18.6s/30s  60.00 iters/s
+
+running (0m41.8s), 0026/1200 VUs, 17747 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  65% ] 022/180 VUs    19.6s/30s  180.00 iters/s
+consultation_plateau     [  65% ] 0003/0360 VUs  19.6s/30s  360.00 iters/s
+enregistrement_plateau   [  65% ] 001/060 VUs    19.6s/30s  60.00 iters/s
+
+running (0m42.8s), 0017/1200 VUs, 18356 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  69% ] 013/180 VUs    20.6s/30s  180.00 iters/s
+consultation_plateau     [  69% ] 0003/0360 VUs  20.6s/30s  360.00 iters/s
+enregistrement_plateau   [  69% ] 001/060 VUs    20.6s/30s  60.00 iters/s
+
+running (0m43.8s), 0018/1200 VUs, 18955 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  72% ] 012/180 VUs    21.6s/30s  180.00 iters/s
+consultation_plateau     [  72% ] 0005/0360 VUs  21.6s/30s  360.00 iters/s
+enregistrement_plateau   [  72% ] 001/060 VUs    21.6s/30s  60.00 iters/s
+
+running (0m44.8s), 0026/1200 VUs, 19546 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  75% ] 020/180 VUs    22.6s/30s  180.00 iters/s
+consultation_plateau     [  75% ] 0005/0360 VUs  22.6s/30s  360.00 iters/s
+enregistrement_plateau   [  75% ] 001/060 VUs    22.6s/30s  60.00 iters/s
+
+running (0m45.8s), 0016/1200 VUs, 20157 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  79% ] 011/180 VUs    23.6s/30s  180.00 iters/s
+consultation_plateau     [  79% ] 0004/0360 VUs  23.6s/30s  360.00 iters/s
+enregistrement_plateau   [  79% ] 001/060 VUs    23.6s/30s  60.00 iters/s
+
+running (0m46.8s), 0026/1200 VUs, 20748 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  82% ] 021/180 VUs    24.6s/30s  180.00 iters/s
+consultation_plateau     [  82% ] 0004/0360 VUs  24.6s/30s  360.00 iters/s
+enregistrement_plateau   [  82% ] 001/060 VUs    24.6s/30s  60.00 iters/s
+
+running (0m47.8s), 0017/1200 VUs, 21356 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  85% ] 011/180 VUs    25.6s/30s  180.00 iters/s
+consultation_plateau     [  85% ] 0005/0360 VUs  25.6s/30s  360.00 iters/s
+enregistrement_plateau   [  85% ] 001/060 VUs    25.6s/30s  60.00 iters/s
+
+running (0m48.8s), 0013/1200 VUs, 21960 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  89% ] 009/180 VUs    26.6s/30s  180.00 iters/s
+consultation_plateau     [  89% ] 0003/0360 VUs  26.6s/30s  360.00 iters/s
+enregistrement_plateau   [  89% ] 001/060 VUs    26.6s/30s  60.00 iters/s
+
+running (0m49.8s), 0028/1200 VUs, 22544 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  92% ] 022/180 VUs    27.6s/30s  180.00 iters/s
+consultation_plateau     [  92% ] 0005/0360 VUs  27.6s/30s  360.00 iters/s
+enregistrement_plateau   [  92% ] 001/060 VUs    27.6s/30s  60.00 iters/s
+
+running (0m50.8s), 0018/1200 VUs, 23155 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  95% ] 012/180 VUs    28.6s/30s  180.00 iters/s
+consultation_plateau     [  95% ] 0005/0360 VUs  28.6s/30s  360.00 iters/s
+enregistrement_plateau   [  95% ] 001/060 VUs    28.6s/30s  60.00 iters/s
+
+running (0m51.8s), 0034/1200 VUs, 23735 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s        179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s        359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s        59.97 iters/s
+commande_plateau         [  99% ] 027/180 VUs    29.6s/30s  180.00 iters/s
+consultation_plateau     [  99% ] 0006/0360 VUs  29.6s/30s  360.00 iters/s
+enregistrement_plateau   [  99% ] 002/060 VUs    29.6s/30s  60.00 iters/s
+     ✓ consultation : 200
+     ✓ commande : 201
+     ✓ commande : éléments transmis
+     ✓ enregistrement : 201
+
+     checks.........................: 100.00% ✓ 31196      ✗ 0     
+     ✓ { phase:plateau }............: 100.00% ✓ 23403      ✗ 0     
+     data_received..................: 26 MB   504 kB/s
+     data_sent......................: 29 MB   546 kB/s
+   ✓ dropped_iterations.............: 0       0/s
+     http_req_blocked...............: avg=67.96µs  med=10.07µs  p(90)=18.78µs  p(95)=219.77µs p(99)=1ms      max=24.48ms 
+     http_req_connecting............: avg=42.65µs  med=0s       p(90)=0s       p(95)=0s       p(99)=569.78µs max=24.41ms 
+     http_req_duration..............: avg=36.77ms  med=14.34ms  p(90)=100.21ms p(95)=147.59ms p(99)=258.23ms max=494.78ms
+       { expected_response:true }...: avg=36.77ms  med=14.34ms  p(90)=100.21ms p(95)=147.59ms p(99)=258.23ms max=494.78ms
+     http_req_failed................: 0.00%   ✓ 0          ✗ 24065 
+     ✓ { phase:plateau }............: 0.00%   ✓ 0          ✗ 18002 
+     http_req_receiving.............: avg=173.99µs med=103.65µs p(90)=263.72µs p(95)=504.31µs p(99)=1.58ms   max=17ms    
+     http_req_sending...............: avg=79.55µs  med=40.35µs  p(90)=97.96µs  p(95)=168.43µs p(99)=807.69µs max=24.25ms 
+     http_req_tls_handshaking.......: avg=0s       med=0s       p(90)=0s       p(95)=0s       p(99)=0s       max=0s      
+     http_req_waiting...............: avg=36.52ms  med=14.06ms  p(90)=99.87ms  p(95)=147.09ms p(99)=258.13ms max=494.73ms
+     http_reqs......................: 24065   460.080976/s
+     iteration_duration.............: avg=37.45ms  med=14.97ms  p(90)=101.2ms  p(95)=148.57ms p(99)=258.85ms max=495.21ms
+     iterations.....................: 23997   458.780934/s
+     vus............................: 30      min=0        max=94  
+     vus_max........................: 1200    min=1200     max=1200
+running (0m52.3s), 0000/1200 VUs, 23997 complete and 0 interrupted iterations
+commande_montee        ✓ [ 100% ] 000/180 VUs    20s  179.92 iters/s
+consultation_montee    ✓ [ 100% ] 0000/0360 VUs  20s  359.87 iters/s
+enregistrement_montee  ✓ [ 100% ] 000/060 VUs    20s  59.97 iters/s
+commande_plateau       ✓ [ 100% ] 000/180 VUs    30s  180.00 iters/s
+consultation_plateau   ✓ [ 100% ] 0000/0360 VUs  30s  360.00 iters/s
+enregistrement_plateau ✓ [ 100% ] 000/060 VUs    30s  60.00 iters/s

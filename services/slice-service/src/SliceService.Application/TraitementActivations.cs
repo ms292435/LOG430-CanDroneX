@@ -64,8 +64,10 @@ public sealed class TraitementActivations : ITraitementActivations
         if (demande.EstTerminee)
             return; // déjà traitée (planifiée deux fois, ou reprise au démarrage)
 
+        // L'état « en cours » n'est pas persisté : aucune écriture en base sur le chemin critique avant l'appel réseau
+        // (constat des mesures de charge). Une demande interrompue reste RECUE en base et sera rejouée au démarrage,
+        // ce qui est sûr puisque la configuration réseau est idempotente.
         demande.Demarrer();
-        await _activations.EnregistrerAsync(demande, service: null, ct);
 
         _journal.LogInformation(
             "Appel NetworkProvisioningPort pour l'élément {ElementId} : S-NSSAI {Snssai}, DNN {Dnn}, 5QI {FiveQi}",

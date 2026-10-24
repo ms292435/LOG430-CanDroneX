@@ -80,6 +80,13 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 - **Traçabilité** : la demande conserve le `X-Correlation-Id` de la requête d'origine, repris avec le `commandeId` dans les journaux du traitement différé.
 - **IMSI** : conservée dans la base de slice-service (contexte Activation seulement), car le traitement est différé ; jamais retournée par l'API ni écrite dans les journaux.
 
+### Mesure de la performance
+
+- k6 tourne dans un conteneur du réseau Docker Compose (profil `charge`) et n'appelle que la passerelle ; un scénario par type d'opération (60/30/10) avec une montée de 1 min puis 5 min en `constant-arrival-rate`.
+- Jeton partagé depuis `setup()`, renouvelé par chaque VU à un instant aléatoire (1 à 3 min avant expiration) : pas de rafale d'appels à Keycloak, qui fausserait la mesure.
+- Centiles discrets (`percentile_disc`) pour le P95 : un centile interpolé n'est pas défini quand des services non actifs sont comptés comme infinis.
+- Constat des essais : avec un pool de connexions de 200 sur slice-service, PostgreSQL (100 connexions) refusait des connexions sous charge (« too many clients »), slice-service répondait 500, le disjoncteur de service-ordering s'ouvrait et les éléments restaient en attente. Chaque service limite désormais son pool à 80 connexions : sous charge, une requête attend une connexion libre au lieu d'échouer.
+
 ## 7. Contrats d'API
 
 - Routes `/api/{api}/v1/{ressource}` alignées sur TMF ; champs JSON dans le langage ubiquitaire (français).
@@ -89,7 +96,7 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 - Contrats OpenAPI générés par Swashbuckle, exportés en YAML dans `docs/openapi/`, avec des conventions communes (erreurs en `application/problem+json`, en-tête `X-Correlation-Id`, 401 et 500 décrits). Un test par service échoue si le contrat publié ne correspond plus à l'API.
 - Contrat de la passerelle **assemblé** plutôt qu'écrit à la main (écart à la décision initiale) : exactement les routes de `krakend.json`, avec les opérations et schémas des contrats des services, et la sécurité `oauth2` `clientCredentials` (URL du jeton du Keycloak fourni) plus un schéma `bearer` équivalent. Il ne peut donc pas dériver de la configuration ; des tests vérifient aussi qu'aucune route interne n'est exposée et que toute route publique est routée.
 - Swagger UI (conteneur, port 8082) sert les quatre contrats ; « Try it out » appelle la passerelle. Le jeton se colle dans le schéma `bearer`, car le Keycloak fourni ne renvoie pas d'en-tête CORS sur la réponse du jeton.
-- **Limite de KrakenD CE** : quand un microservice est injoignable, la passerelle répond 500 sans corps (constat du projet de démarrage fourni ; ni la configuration ni Lua ne permettent d'y mettre un corps sans plugin Go). Les erreurs produites par les microservices, dont le 503 de la commande quand le registre des drones est en panne, ont le format uniforme RFC 9457.
+- **Limite de KrakenD CE, acceptée et documentée** (décision du 2026-10-24, à reprendre dans l'ADR sur la passerelle) : quand un microservice est injoignable, la passerelle répond 500 sans corps (constat du projet de démarrage fourni ; ni la configuration ni Lua ne permettent d'y mettre un corps sans plugin Go). On garde KrakenD CE, recommandé par l'énoncé et utilisé au Labo 05, plutôt qu'un plugin Go ou une autre passerelle. Les erreurs produites par les microservices, dont le 503 de la commande quand le registre des drones est en panne, ont le format uniforme RFC 9457 ; le contrat de la passerelle et le script des cas attendus décrivent et vérifient ce 500.
 
 ## 8. Organisation du code
 

@@ -27,9 +27,10 @@ SELECT
     count(*) FILTER (WHERE etat = 'ACTIF')                          AS services_actifs,
     count(*) FILTER (WHERE etat = 'EN_ECHEC')                       AS services_en_echec,
     count(*) FILTER (WHERE etat = 'EN_ACTIVATION')                  AS services_non_termines,
-    round(percentile_cont(0.50) WITHIN GROUP (ORDER BY delai_s)::numeric, 3) AS p50_s,
-    round(percentile_cont(0.95) WITHIN GROUP (ORDER BY delai_s)::numeric, 3) AS p95_s,
-    round(percentile_cont(0.99) WITHIN GROUP (ORDER BY delai_s)::numeric, 3) AS p99_s,
+    -- Centiles discrets (valeur observée, sans interpolation) : restent définis avec des services non actifs.
+    round((percentile_disc(0.50) WITHIN GROUP (ORDER BY delai_s))::numeric, 3) AS p50_s,
+    round((percentile_disc(0.95) WITHIN GROUP (ORDER BY delai_s))::numeric, 3) AS p95_s,
+    round((percentile_disc(0.99) WITHIN GROUP (ORDER BY delai_s))::numeric, 3) AS p99_s,
     round(100.0 * count(*) FILTER (WHERE delai_s <= 5) / NULLIF(count(*), 0), 2) AS pct_sous_5s,
-    (percentile_cont(0.95) WITHIN GROUP (ORDER BY delai_s) <= 5)    AS cible_p95_atteinte
+    (percentile_disc(0.95) WITHIN GROUP (ORDER BY delai_s) <= 5)    AS cible_p95_atteinte
 FROM fenetre;

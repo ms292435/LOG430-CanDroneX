@@ -1,0 +1,6 @@
+Date (UTC)       : 2026-10-24T17:04:37Z
+Protocole        : montée 20s, plateau 30s à 600 op/s (60 % consultations, 30 % commandes, 10 % enregistrements)
+Processeur       : 12th Gen Intel(R) Core(TM) i5-12450H
+Mémoire de l'hôte: 15,7 Go
+Docker           : 12 processeurs, 8154390528 octets, Docker Desktop
+Réseau simulé    : {'Activation__DelaiMaxReseau': '00:00:05', 'MockOpen5GS__LatenceMaxMs': '1500', 'MockOpen5GS__LatenceMinMs': '300', 'MockOpen5GS__TauxEchec': '0', 'Processeur__ConcurrenceMax': '500'}

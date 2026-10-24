@@ -144,15 +144,18 @@ public sealed class PersistanceSqlTests : IAsyncLifetime
     [Fact]
     public async Task La_requete_livree_calcule_le_p95_et_compte_un_service_non_actif_comme_depassant_5_s()
     {
-        // 19 services actifs en 1 à 1,9 s et 1 service resté en activation à la fin du test.
-        for (var i = 0; i < 19; i++)
+        // 18 services actifs en 1 à 1,85 s et 2 services restés en activation à la fin du test (10 % > 5 %).
+        for (var i = 0; i < 18; i++)
         {
             var (d, s) = Nouvelle(acceptedAt: Debut.AddSeconds(i));
             await _depot.AjouterAsync(d, s);
             await TerminerAsync(d, s, delaiS: 1 + i * 0.05);
         }
-        var (nonTerminee, service) = Nouvelle(acceptedAt: Debut.AddSeconds(30));
-        await _depot.AjouterAsync(nonTerminee, service);
+        for (var i = 0; i < 2; i++)
+        {
+            var (nonTerminee, service) = Nouvelle(acceptedAt: Debut.AddSeconds(30 + i));
+            await _depot.AjouterAsync(nonTerminee, service);
+        }
 
         var resultat = await _postgres.ExecAsync(
         [
@@ -164,9 +167,10 @@ public sealed class PersistanceSqlTests : IAsyncLifetime
         Assert.True(resultat.ExitCode == 0, resultat.Stderr);
         var colonnes = resultat.Stdout.Trim().Split(';');
         Assert.Equal("20", colonnes[0]);           // tous les services commandés sont comptés
-        Assert.Equal("19", colonnes[1]);           // actifs
-        Assert.Equal("1", colonnes[3]);            // non terminé, compté comme dépassant 5 s
-        Assert.Equal("Infinity", colonnes[5]);     // P95 : 1 service sur 20 au-delà de la cible
+        Assert.Equal("18", colonnes[1]);           // actifs
+        Assert.Equal("2", colonnes[3]);            // non terminés, comptés comme dépassant 5 s
+        Assert.Equal("Infinity", colonnes[5]);     // P95 : 2 services sur 20 au-delà de la cible
+        Assert.Equal("90.00", colonnes[7]);        // 18 sur 20 sous 5 s
         Assert.Equal("f", colonnes[8]);            // cible non atteinte
     }
 

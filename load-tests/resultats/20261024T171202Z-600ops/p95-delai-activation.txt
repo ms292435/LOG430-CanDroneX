@@ -1,0 +1,24 @@
+== Plateau : commandes acceptées de 2026-10-24T17:13:09.137Z à 2026-10-24T17:18:09.137Z
+-[ RECORD 1 ]---------+-------
+services_commandes    | 107758
+services_actifs       | 107758
+services_en_echec     | 0
+services_non_termines | 0
+p50_s                 | 1.181
+p95_s                 | 3.748
+p99_s                 | 4.695
+pct_sous_5s           | 99.72
+cible_p95_atteinte    | t
+
+== Test complet : de 2026-10-24T17:12:09.137Z à 2026-10-24T17:18:09.137Z
+-[ RECORD 1 ]---------+-------
+services_commandes    | 118520
+services_actifs       | 118520
+services_en_echec     | 0
+services_non_termines | 0
+p50_s                 | 1.164
+p95_s                 | 3.659
+p99_s                 | 4.664
+pct_sous_5s           | 99.74
+cible_p95_atteinte    | t
+

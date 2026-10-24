@@ -83,7 +83,22 @@ docker compose up -d slice-service                      # retour au taux par dé
 
 Paramètres du réseau simulé (`.env` ou variables d'environnement) : `MOCK_LATENCE_MIN_MS` (300), `MOCK_LATENCE_MAX_MS` (1500), `MOCK_TAUX_ECHEC` (0, entre 0 et 1).
 
-## Mesurer le délai d'activation (P95)
+## Mesurer le débit et le délai d'activation (k6)
+
+```bash
+./load-tests/executer-mesure.sh                          # 1 min de montée, puis 5 min à 600 op/s (environ 7 min)
+RATE=100 MONTEE=10s PLATEAU=30s ./load-tests/executer-mesure.sh   # essai court
+```
+
+Le script ([load-tests/executer-mesure.sh](load-tests/executer-mesure.sh)) lance k6 dans un conteneur du réseau Docker (profil `charge`), dirigé vers l'API Gateway, avec le script [load-tests/charge-phase2.js](load-tests/charge-phase2.js) :
+
+- exécuteur `constant-arrival-rate` (précédé d'une montée `ramping-arrival-rate`), un scénario par type d'opération : 60 % de consultations (drone, commande, état d'un service), 30 % de commandes C2 + Imagerie (2 activations chacune), 10 % d'enregistrements de drones ;
+- jeton obtenu une fois dans `setup()`, puis renouvelé par chaque VU avant son expiration (jeton de 5 min, test de 6 min) ;
+- seuils k6 : aucune itération abandonnée, moins de 1 % d'erreurs sur le plateau.
+
+Il consigne l'environnement de mesure, échantillonne la file d'activation (toutes les 5 s) et les ressources des conteneurs (toutes les 15 s), puis calcule le P95 du délai d'activation dès la fin du test. Tout est enregistré dans `load-tests/resultats/<exécution>/` : `resume-k6.json` (export `handleSummary`), `fenetre.json`, `file-activation.csv`, `ressources.csv`, `p95-delai-activation.txt`, `environnement.txt` et `analyse.md` (produit par [load-tests/analyser-resultats.py](load-tests/analyser-resultats.py)).
+
+Le P95 seul, sur une fenêtre choisie :
 
 ```bash
 docker compose exec -T slice-db psql -U slice_service -d slice_service \

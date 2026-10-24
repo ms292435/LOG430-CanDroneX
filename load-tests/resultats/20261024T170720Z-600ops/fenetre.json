@@ -1,0 +1,13 @@
+{
+  "debutTest": "2026-10-24T17:07:28.839Z",
+  "debutPlateau": "2026-10-24T17:07:48.839Z",
+  "finTest": "2026-10-24T17:08:18.839Z",
+  "tauxCible": 600,
+  "montee": "20s",
+  "plateau": "30s",
+  "melange": {
+    "consultation": 0.6,
+    "commande": 0.3,
+    "enregistrement": 0.1
+  }
+}

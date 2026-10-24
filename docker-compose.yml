@@ -1,4 +1,6 @@
 # CanDroneX — Phase 2 (microservices)
+# Chaque service limite son pool à 80 connexions, sous la limite de 100 du serveur PostgreSQL : sous charge,
+# une requête attend une connexion libre au lieu d'échouer (« too many clients »).
 # Seuls la passerelle (8080), Keycloak (8081, pour obtenir un jeton) et la documentation Swagger UI (8082)
 # sont publiés sur l'hôte.
 # Les microservices et leurs bases ne sont joignables que sur le réseau Docker interne.
@@ -66,7 +68,7 @@ services:
       context: .
       dockerfile: services/drone-management-service/Dockerfile
     environment:
-      ConnectionStrings__Drones: Host=drone-db;Database=drone_management;Username=drone_management;Password=${DRONE_DB_PASSWORD}
+      ConnectionStrings__Drones: Host=drone-db;Database=drone_management;Username=drone_management;Password=${DRONE_DB_PASSWORD};Maximum Pool Size=80
       Jwt__Emetteur: http://localhost:8081/realms/candronex
       Jwt__Audience: candronex-api
       Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
@@ -97,7 +99,7 @@ services:
       context: .
       dockerfile: services/service-ordering-service/Dockerfile
     environment:
-      ConnectionStrings__ServiceOrdering: Host=ordering-db;Database=service_ordering;Username=service_ordering;Password=${ORDERING_DB_PASSWORD}
+      ConnectionStrings__ServiceOrdering: Host=ordering-db;Database=service_ordering;Username=service_ordering;Password=${ORDERING_DB_PASSWORD};Maximum Pool Size=80
       Jwt__Emetteur: http://localhost:8081/realms/candronex
       Jwt__Audience: candronex-api
       Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
@@ -111,6 +113,8 @@ services:
 
   ordering-db:
     image: postgres:16-alpine
+    # Même réglage que slice-db : environ 180 commandes/s écrites à 600 op/s.
+    command: postgres -c shared_buffers=512MB -c max_wal_size=4GB -c checkpoint_timeout=15min
     environment:
       POSTGRES_DB: service_ordering
       POSTGRES_USER: service_ordering
@@ -130,7 +134,7 @@ services:
       context: .
       dockerfile: services/slice-service/Dockerfile
     environment:
-      ConnectionStrings__Slices: Host=slice-db;Database=slice_service;Username=slice_service;Password=${SLICE_DB_PASSWORD};Maximum Pool Size=200
+      ConnectionStrings__Slices: Host=slice-db;Database=slice_service;Username=slice_service;Password=${SLICE_DB_PASSWORD};Maximum Pool Size=80
       Jwt__Emetteur: http://localhost:8081/realms/candronex
       Jwt__Audience: candronex-api
       Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
@@ -150,6 +154,9 @@ services:
 
   slice-db:
     image: postgres:16-alpine
+    # Base la plus sollicitée (environ 360 activations/s à 600 op/s) : cache plus grand que les 128 Mo par défaut
+    # et checkpoints plus espacés, pour éviter le ralentissement constaté après 4 min de charge. Durabilité inchangée.
+    command: postgres -c shared_buffers=512MB -c max_wal_size=4GB -c checkpoint_timeout=15min
     environment:
       POSTGRES_DB: slice_service
       POSTGRES_USER: slice_service
@@ -163,6 +170,19 @@ services:
       interval: 5s
       retries: 10
     restart: unless-stopped
+
+  # --- Générateur de charge k6 (profil « charge » : lancé seulement par load-tests/executer-mesure.sh) ----
+  # Sur le réseau Docker, comme un client : il obtient son jeton auprès de Keycloak et n'appelle que la passerelle.
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["charge"]
+    environment:
+      GW: http://api-gateway:8080
+      KC: http://keycloak:8080
+      CLIENT_ID: inspectra-demo
+      CLIENT_SECRET: ${INSPECTRA_DEMO_SECRET}
+    volumes:
+      - ./load-tests:/scripts
 
 volumes:
   drone-db-data:
