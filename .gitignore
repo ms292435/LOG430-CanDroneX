@@ -76,3 +76,6 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
+
+# Le gabarit d environnement est versionne
+!.env.example

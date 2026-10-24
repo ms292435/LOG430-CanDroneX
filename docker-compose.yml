@@ -1,45 +1,75 @@
+# CanDroneX — Phase 2 (microservices)
+# Seuls la passerelle (8080) et Keycloak (8081, pour obtenir un jeton) sont publiés sur l'hôte.
+# Les microservices et leurs bases ne sont joignables que sur le réseau Docker interne.
+name: candronex
+
 services:
-  candronex.host:
-    image: ${DOCKER_REGISTRY-}candronexhost
+  # --- Serveur d'autorisation fourni (realm candronex préconfiguré) -----------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm --http-port=8080
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      # Émetteur (iss) fixe, que le jeton soit obtenu via localhost:8081 ou keycloak:8080
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      CANDRONEX_ADMIN_SECRET: ${CANDRONEX_ADMIN_SECRET}
+      CLIENT_MANAGEMENT_SERVICE_SECRET: ${CLIENT_MANAGEMENT_SERVICE_SECRET}
+      INSPECTRA_DEMO_SECRET: ${INSPECTRA_DEMO_SECRET}
+      AEROTECH_DEMO_SECRET: ${AEROTECH_DEMO_SECRET}
+      JETON_COURT_SECRET: ${JETON_COURT_SECRET}
+    volumes:
+      - ./keycloak/realm-candronex.json:/opt/keycloak/data/import/realm-candronex.json:ro
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'UP' <&3"]
+      interval: 10s
+      retries: 20
+
+  # --- Point d'entrée unique des clients B2B ---------------------------------------------------
+  api-gateway:
+    image: devopsfaith/krakend:2.7.2
+    volumes:
+      - ./krakend/krakend.json:/etc/krakend/krakend.json:ro
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      keycloak: { condition: service_healthy }
+      drone-management-service: { condition: service_started }
+
+  # --- drone-management-service : UC-02 et résolution de l'identité réseau ----------------------
+  drone-management-service:
     build:
       context: .
-      dockerfile: CanDroneX.Host/Dockerfile
+      dockerfile: services/drone-management-service/Dockerfile
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__CanDroneX=Host=postgres;Port=5432;Database=candronex;Username=postgres;Password=postgres
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
+      ConnectionStrings__Drones: Host=drone-db;Database=drone_management;Username=drone_management;Password=${DRONE_DB_PASSWORD}
+      Jwt__Emetteur: http://localhost:8081/realms/candronex
+      Jwt__Audience: candronex-api
+      Jwt__JwksUrl: http://keycloak:8080/realms/candronex/protocol/openid-connect/certs
     depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - candronex
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: candronex-postgres
+      drone-db: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: candronex
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./CanDroneX.Host/scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d candronex"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      - candronex
+    # pas de "ports:" : joignable uniquement par la passerelle et les autres services
 
-networks:
-  candronex:
+  drone-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: drone_management
+      POSTGRES_USER: drone_management
+      POSTGRES_PASSWORD: ${DRONE_DB_PASSWORD}
+    volumes:
+      - drone-db-data:/var/lib/postgresql/data
+      - ./services/drone-management-service/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drone_management -d drone_management"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  drone-db-data:

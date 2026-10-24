@@ -1,0 +1,127 @@
+{
+  "$schema": "https://www.krakend.io/schema/v2.7/krakend.json",
+  "version": 3,
+  "name": "CanDroneX API Gateway",
+  "port": 8080,
+  "timeout": "5s",
+  "output_encoding": "no-op",
+  "extra_config": {
+    "security/cors": {
+      "allow_origins": [
+        "*"
+      ],
+      "allow_methods": [
+        "GET",
+        "POST"
+      ],
+      "allow_headers": [
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Correlation-Id"
+      ],
+      "expose_headers": [
+        "X-Correlation-Id",
+        "Location"
+      ]
+    }
+  },
+  "endpoints": [
+    {
+      "@comment": "UC-02 - Enregistrer un drone",
+      "endpoint": "/api/drone-management/v1/drone",
+      "method": "POST",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://drone-management-service:8080"
+          ],
+          "url_pattern": "/api/drone-management/v1/drone",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
+    },
+    {
+      "@comment": "Lister les drones du client",
+      "endpoint": "/api/drone-management/v1/drone",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://drone-management-service:8080"
+          ],
+          "url_pattern": "/api/drone-management/v1/drone",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
+    },
+    {
+      "@comment": "Consulter un drone du client. La route .../identiteReseau reste interne : elle n'est pas declaree ici.",
+      "endpoint": "/api/drone-management/v1/drone/{droneId}",
+      "method": "GET",
+      "input_headers": [
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-Id"
+      ],
+      "output_encoding": "no-op",
+      "backend": [
+        {
+          "host": [
+            "http://drone-management-service:8080"
+          ],
+          "url_pattern": "/api/drone-management/v1/drone/{droneId}",
+          "encoding": "no-op"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/candronex/protocol/openid-connect/certs",
+          "disable_jwk_security": true,
+          "issuer": "http://localhost:8081/realms/candronex",
+          "audience": [
+            "candronex-api"
+          ],
+          "cache": true
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,0 @@
-@CanDroneX.Host_HostAddress = http://localhost:5099
-
-GET {{CanDroneX.Host_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
