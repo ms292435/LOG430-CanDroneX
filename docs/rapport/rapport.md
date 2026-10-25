@@ -108,7 +108,7 @@ Cinq attributs ont été retenus pour la Phase 2. Les trois premiers sont direct
 
 | # | Attribut de qualité | Motivation | Mécanisme architectural | Vérification |
 |---:6|---:14|---:27|---:30|---:23|
-| 1 | Sécurité | Un client B2B ne doit accéder qu’à ses drones, commandes et services ; les identités d’abonné (IMSI) sont des renseignements personnels (Loi 25). | Validation du JWT par la passerelle et par chaque service ; identité lue dans `azp` ; filtrage par client ; 404 pour la ressource d’un autre client ; IMSI jamais exposée. | Tests JWT par service, 54 cas attendus de bout en bout (§10.3). |
+| 1 | Sécurité | Un client B2B ne doit accéder qu’à ses drones, commandes et services ; les identités d’abonné (IMSI) sont des renseignements personnels (Loi 25). | Validation du JWT par la passerelle et par chaque service ; identité lue dans `azp` ; filtrage par client ; 404 pour la ressource d’un autre client ; IMSI jamais exposée. | Tests JWT par service, 52 cas attendus de bout en bout (§10.3). |
 | 2 | Performance | Cibles de la phase microservices (CdC §6.2) : P95 du délai d’activation ≤ 5 s, débit ≥ 600 op/s. | Activation asynchrone dans slice-service, file en mémoire à concurrence bornée, pools de connexions, bases dimensionnées. | Mesure k6 et requête P95 (§10.4). |
 | 3 | Fiabilité et cohérence | Une répétition ou une panne ne doit produire ni doublon ni état incohérent ; une commande ne doit pas être perdue. | Idempotence (clé du client, empreinte, élément de commande), transactions locales, états qui ne reculent jamais, reprise au démarrage. | Tests de rejeu, de rejeu simultané et de pannes (§10.3). |
 | 4 | Disponibilité (tolérance aux pannes) | La panne d’un service ne doit pas bloquer tout le parcours. | Délais d’attente, reprise et disjoncteur sur les appels entre services ; commande acceptée et relancée si slice-service est indisponible. | Cas « service arrêté » du script des cas attendus. |
@@ -256,7 +256,7 @@ Tous les échanges sont en HTTP/JSON synchrone. Le client B2B n’appelle que la
 | service-ordering-service | API d’activation (interne) | Relire l’état des activations lors du suivi de la commande. | `GET /api/service-activation/v1/activation?elementId=…` |
 | slice-service | API des drones (interne) | Résoudre le `droneId` en IMSI et type de carte. | `GET /api/drone-management/v1/drone/{droneId}/identiteReseau` |
 
-## Demandes, réponses et erreurs
+### Demandes, réponses et erreurs
 
 - Chaque API définit ses propres DTO (records de la couche Api) ; les entités du domaine et les tables ne sont jamais exposées. Les champs JSON sont en camelCase dans le langage ubiquitaire, les dates en ISO 8601 UTC et les identifiants en UUID. Un service qui en appelle un autre a sa propre copie du DTO distant (ex. `IdentiteReseauDto`) et n’en lit que les champs utiles.
 - Une création répond `201 Created` avec l’en-tête `Location`. Une demande d’activation répond `202 Accepted`, car elle est traitée en arrière-plan. Un rejeu idempotent répond `200 OK` avec la ressource existante.
@@ -271,7 +271,7 @@ Tous les échanges sont en HTTP/JSON synchrone. Le client B2B n’appelle que la
 | 422 | Règle métier non respectée : drone inconnu du client, offre inconnue, type de carte autre que SIM ou eSIM. |
 | 503 | Dépendance indisponible : la demande n’a pas été traitée et peut être rejouée. |
 
-## Délais d’attente et réaction aux échecs
+### Délais d’attente et réaction aux échecs
 
 Chaque client HTTP interne utilise le gestionnaire de résilience standard de .NET (Microsoft.Extensions.Http.Resilience) : 2 s par tentative, une seule reprise, 4 s au total et un disjoncteur. La reprise est sûre parce que les deux appels qui écrivent sont idempotents.
 
@@ -286,7 +286,7 @@ Chaque client HTTP interne utilise le gestionnaire de résilience standard de .N
 
 Les cycles sont évités par construction : les appels suivent le graphe du §4.1, et la mise à jour de la commande se fait en *pull* (la commande relit l’activation) plutôt qu’en *push* (slice-service rappellerait la commande). ADR-004 détaille ces choix.
 
-## Idempotence et cohérence des données
+### Idempotence et cohérence des données
 
 - **Commande** : le couple (client, `Idempotency-Key`) est unique dans `ordering-db`. Une empreinte SHA-256 du contenu est conservée avec la commande. Une même clé avec le même contenu renvoie la commande existante (`200`) ; avec un autre contenu, elle donne `409`. La commande et ses éléments sont écrits en une transaction. Si deux rejeux simultanés arrivent, la contrainte d’unicité départage les écritures : la seconde relit la commande enregistrée.
 - **Activation** : l’`elementId` est unique dans `slice-db`. Une seconde demande pour le même élément renvoie la demande existante (`200`), sans nouvelle configuration réseau. Le mock est lui aussi idempotent pour un couple (IMSI, S-NSSAI).
@@ -297,7 +297,7 @@ Les ports hexagonaux isolent ces appels du domaine. Les services applicatifs ne 
 @@ 4.3 Contrats REST et OpenAPI
 Chaque API est versionnée dans son chemin : `/api/{api}/v1/{ressource}`, où `{api}` reprend le nom de l’API TM Forum correspondante (ex. `/api/service-ordering/v1/serviceOrder`). Une version 2 serait exposée sous `v2` à côté de la première, et la passerelle routerait l’une et l’autre.
 
-Les contrats OpenAPI sont **générés depuis le code** (Swashbuckle) : DTO, commentaires XML, attributs de validation et codes de réponse déclarés sur les contrôleurs. Un filtre commun (`ConventionsContrat`) ajoute à chaque opération l’en-tête `X-Correlation-Id`, les réponses d’erreur Problem Details et l’exigence du jeton. Les contrats sont exportés et versionnés dans `docs/openapi`. Un test de chaque service échoue si le contrat ne correspond plus à l’API (§8.4).
+Les contrats OpenAPI sont **générés depuis le code** (Swashbuckle) : DTO, commentaires XML, attributs de validation et codes de réponse déclarés sur les contrôleurs. Un filtre commun (`ConventionsContrat`) ajoute à chaque opération l’en-tête `X-Correlation-Id`, les réponses d’erreur Problem Details et l’exigence du jeton. Un second filtre (`ExemplesContrat`) donne, pour chaque opération, un exemple du corps de requête et de chaque réponse documentée (succès, rejeu et erreurs), tirés d’appels réels par la passerelle. Un test de `tests/Contrats.Tests` échoue s’il en manque un, sauf pour 401 et 500, qui n’ont pas de corps utile. Les contrats sont exportés et versionnés dans `docs/openapi`. Un test de chaque service échoue si le contrat ne correspond plus à l’API (§8.4).
 
 | Contrat | Contenu |
 |---:30|---:70|
@@ -397,7 +397,7 @@ Les chapitres 1 à 8 couvrent les sections Arc42 demandées. Les cinq vues 4+1 c
 | Développement | §5.3 | Arborescence du dépôt, projets par couche, règles de dépendance. |
 | Processus | §6.1, §6.2 | Séquences du jeton et d’UC-02, d’UC-04 et d’UC-06 ; cycle de vie des éléments, demandes et services. |
 | Déploiement | §7.1 | Conteneurs Docker Compose, ports, réseau, volumes. |
-| Scénarios | §1.2, §6.1 | Cas d’utilisation de la Phase 2 et scénarios de référence, vérifiés par `scripts/tester-cas-attendus.sh` (§11). |
+| Scénarios | §1.2, §6.1 | Cas d’utilisation de la Phase 2 et scénarios de référence, vérifiés par `scripts/tester-cas-attendus.sh` (§10.3). |
 
 @@ 5.1 Décomposition en microservices — vue Logique
 ![Vue logique : microservices, bounded contexts, API exposées, bases propres et dépendances](../diagrammes/decomposition-logique.png)
@@ -483,13 +483,13 @@ CanDroneX/
 Cette vue suit un appel B2B de bout en bout, de l’obtention du jeton à l’activation des deux slices du drone DRN-0231, puis le cycle de vie des objets qui portent l’état. Les numéros des diagrammes renvoient aux étapes citées dans le texte.
 
 @@ 6.1 Scénarios de référence
-## Jeton, puis UC-02 par la passerelle
+### Jeton, puis UC-02 par la passerelle
 
 ![Obtention du jeton auprès du Keycloak fourni, puis UC-02 par la passerelle, avec les refus](../diagrammes/sequence-jeton-uc02.png)
 
 Le client obtient un jeton auprès de Keycloak (étapes 1-2), puis appelle la passerelle (3). La passerelle valide le jeton (4) et transmet l’`Authorization` tel quel (5). drone-management-service revalide le jeton et prend le client dans `azp` (6). Il vérifie ensuite l’unicité de l’IMSI et de l’identifiant métier (7-8), puis enregistre le drone pour ce client (9). La réponse `201` ne contient pas l’IMSI (10-11).
 
-## UC-04 puis UC-06 : commande C2 et Imagerie
+### UC-04 puis UC-06 : commande C2 et Imagerie
 
 ![UC-04 puis UC-06 (1/2) : prise de commande et demandes d’activation](../diagrammes/sequence-uc04-commande.png)
 
@@ -499,7 +499,7 @@ service-ordering-service vérifie d’abord la clé d’idempotence (3), puis le
 
 En arrière-plan, le processeur appelle le mock par le `NetworkProvisioningPort` (1-2). Selon la réponse, il enregistre `REUSSIE` et `ACTIF` avec `activatedAt`, ou `ECHOUEE` et `EN_ECHEC` avec la cause (3-6). Quand le client suit sa commande (7-8), service-ordering-service relit les activations (9-10) et recalcule l’état global (11). Le client voit `COMPLETEE`, `PARTIELLE` (C2 actif, Imagerie en échec) ou `ECHOUEE` (12-13).
 
-## Refus et défaillances démontrés
+### Refus et défaillances démontrés
 
 | Cas | Où le refus se produit | Réponse |
 |---:30|---:28|---:42|
@@ -525,7 +525,7 @@ Trois objets portent l’état, chacun dans le service qui en est propriétaire.
 | `EN_ECHEC` | Le réseau a refusé, a dépassé le délai ou était injoignable ; cause conservée. | `EN_ACTIVATION` à la reprise (UC-10, Phase 3). |
 | `ANNULE`, `COMPENSE` | Modélisés dans le domaine, déclenchés en Phase 3. | — |
 
-**Horodatages.** `acceptedAt` est fixé par service-ordering-service quand la commande est enregistrée, puis transmis à slice-service avec la demande. `activatedAt` est fixé par slice-service dans la transaction qui passe le service à `ACTIF`. Les deux valeurs sont dans `slice-db`, ce qui permet de calculer le P95 du délai d’activation en une requête SQL (§11). La demande ne passe à `EN_COURS` qu’en mémoire, quand le processeur la prend dans la file : cet état n’est pas écrit en base, ce qui économise une écriture par activation (ADR-005).
+**Horodatages.** `acceptedAt` est fixé par service-ordering-service quand la commande est enregistrée, puis transmis à slice-service avec la demande. `activatedAt` est fixé par slice-service dans la transaction qui passe le service à `ACTIF`. Les deux valeurs sont dans `slice-db`, ce qui permet de calculer le P95 du délai d’activation en une requête SQL (§10.4). La demande ne passe à `EN_COURS` qu’en mémoire, quand le processeur la prend dans la file : cet état n’est pas écrit en base, ce qui économise une écriture par activation (ADR-005).
 
 **État global de la commande.** Il n’est pas stocké : l’agrégat `Commande` le calcule à partir de ses éléments, en évaluant les règles dans l’ordre suivant.
 
@@ -604,4 +604,199 @@ curl -s "http://localhost:8080/api/service-inventory/v1/service?droneId=00000000
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**Vérifier l’état.** `docker compose ps` montre l’état des conteneurs. Les journaux JSON se suivent avec `docker compose logs -f`, et une commande se retrouve dans tous les services par son `commandeId`. Deux scripts rejouent les scénarios par la passerelle : `scripts/demo-bout-en-bout.sh` (UC-02, UC-04 puis UC-06, jusqu’à l’état actif) et `scripts/tester-cas-attendus.sh` (54 cas, §11). Pour démontrer l’échec, on redémarre slice-service avec `MOCK_TAUX_ECHEC=1 docker compose up -d slice-service`.
+**Vérifier l’état.** `docker compose ps` montre l’état des conteneurs. Les journaux JSON se suivent avec `docker compose logs -f`, et une commande se retrouve dans tous les services par son `commandeId`. Deux scripts rejouent les scénarios par la passerelle : `scripts/demo-bout-en-bout.sh` (UC-02, UC-04 puis UC-06, jusqu’à l’état actif) et `scripts/tester-cas-attendus.sh` (52 cas, §10.3). Pour démontrer l’échec, on redémarre slice-service avec `MOCK_TAUX_ECHEC=1 docker compose up -d slice-service`.
+
+@@ 8. Concepts transversaux
+Ce chapitre réunit les règles qui s’appliquent aux trois services et la preuve de chacune. Chaque service implémente ces règles dans son propre code : aucune bibliothèque n’est partagée (§5.3).
+
+@@ 8.1 Persistance et intégrité des données
+Chaque service a sa base PostgreSQL 16, dans son propre conteneur et avec son propre utilisateur. L’accès se fait en SQL paramétré par des DAO Npgsql, sans ORM, derrière les ports de dépôt de l’application.
+
+| Base | Schémas et tables | Contraintes d’intégrité principales |
+|---:16|---:32|---:52|
+| `drone-db` | `drones.drone` | IMSI unique et de 14 ou 15 chiffres ; identifiant métier unique par client (`client_id`, `identifiant_metier`) et au bon format ; type de carte `SIM` ou `ESIM`. |
+| `ordering-db` | `catalogue.specification_service`, `catalogue.caracteristique_specification` ; `commandes.commande`, `commandes.element_commande` | Clé (client, clé d’idempotence) unique ; un service au plus par drone dans une commande (`commande_id`, `drone_id`, `specification_id`) ; action et état dans leur liste ; un élément `ACTIF` a son `activated_at` ; caractéristiques figées en JSONB. |
+| `slice-db` | `activation.demande_activation` ; `inventaire.service` | Une demande et un service au plus par `element_id` ; IMSI au bon format ; une demande est terminée si et seulement si elle a `terminee_at` ; un service est `ACTIF` si et seulement s’il a `activated_at`. |
+
+**Schéma et migrations.** Le schéma de chaque base est décrit par `services/<service>/db/init.sql`, versionné avec le code du service. PostgreSQL l’exécute au premier démarrage d’un volume vide. Le script est rejouable (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`). En Phase 2, il n’y a qu’une version du schéma ; un outil de migration versionnée sera nécessaire dès qu’une base existante devra évoluer (§11).
+
+**Données de démonstration.** `drone-db` contient DRN-0231 (`inspectra-demo`) et AT-0500 (`aerotech-demo`). `ordering-db` contient les offres `C2_URLLC` et `IMAGERIE_EMBB` et leurs sept caractéristiques. `slice-db` démarre vide : son contenu naît des commandes.
+
+**Écritures atomiques.** Chaque changement d’état métier est une seule transaction locale : la commande avec ses éléments ; la demande d’activation avec son service d’inventaire, à la réception puis au résultat. Il n’y a jamais de transaction entre deux bases.
+
+**Cohérence entre services.** Aucun service ne lit la base d’un autre ; les références entre services sont des identifiants (`droneId`, `elementId`, `commandeId`), sans clé étrangère entre bases. La cohérence repose sur trois règles :
+
+- **Copie figée.** Ce dont un service a besoin plus tard est copié au moment où il le reçoit : l’élément fige l’offre et sa version, et la demande d’activation conserve l’IMSI résolue, l’offre et `acceptedAt`. Une modification ultérieure du catalogue ne change donc ni une commande ni une activation en cours.
+- **Source de vérité unique.** slice-service est la référence de l’état d’activation. La commande en garde une copie, mise à jour quand le client la suit, et cette copie ne recule jamais (`commandes.rang_etat`).
+- **Vérification à l’entrée.** L’existence et l’appartenance du drone sont vérifiées par API, avec le jeton du client, avant d’enregistrer la commande puis avant d’enregistrer la demande d’activation.
+
+@@ 8.2 Idempotence des commandes et des activations
+Une même demande peut être répétée à quatre niveaux : le client rejoue sa commande, service-ordering-service relance une demande, slice-service redémarre et rejoue ses demandes, ou deux suivis se croisent. Chaque niveau a son mécanisme.
+
+| Niveau | Clé ou mécanisme | Portée et persistance | Comportement au rejeu |
+|---:16|---:26|---:26|---:32|
+| Commande | En-tête `Idempotency-Key` (1 à 100 caractères) et empreinte SHA-256 du contenu (drone, action et offre de chaque élément, sans tenir compte de leur ordre) | Par client : contrainte unique (`client_id`, `cle_idempotence`) dans `ordering-db`, sans expiration | Même contenu : `200` avec la commande existante, et relance des éléments `EN_ATTENTE`. Contenu différent : `409`. Deux rejeux simultanés : la contrainte départage, et le second relit la commande. |
+| Demande d’activation | `elementId` (attribué par service-ordering-service) | Contrainte unique dans `slice-db` (demande et service) | `200` avec la demande existante et son état ; aucune nouvelle demande, aucun nouveau service, aucune nouvelle configuration. |
+| Configuration réseau | Couple (IMSI, S-NSSAI) | Profils d’abonnés du `MockOpen5GSAdapter` (en mémoire) ; le futur adaptateur Open5GS devra offrir la même garantie | Une slice déjà associée réussit sans seconde association (journal « aucune configuration en double »). |
+| État de l’élément | Rang de l’état (`EN_ATTENTE` < `EN_ACTIVATION` < état final) | Condition de la requête `UPDATE` dans `ordering-db` | Une mise à jour qui ferait reculer l’élément n’a aucun effet. |
+
+Une association slice-drone ne peut donc pas être créée deux fois. Une commande rejouée ne crée pas de second élément, un élément n’a qu’une demande, une demande n’a qu’un service d’inventaire, et le réseau n’associe pas deux fois la même slice. Les tests d’intégration rejouent la commande et la demande d’activation et vérifient qu’aucune ligne ni association n’est créée en double ; le script des cas attendus fait la même vérification par la passerelle.
+
+@@ 8.3 Gestion des erreurs et des défaillances
+**Format commun.** Toute erreur produite par un microservice est une réponse RFC 9457 (`application/problem+json`) : `type`, `title`, `status`, `detail` et `instance`, plus `traceId` et `correlationId` pour retrouver la requête dans les journaux. Les erreurs de validation ajoutent `errors`, champ par champ. Une erreur inattendue donne `500` sans détail interne, et sa trace complète ne va qu’aux journaux. Un seul gestionnaire (`GestionnaireExceptions`) traduit les exceptions du domaine et de l’application en codes HTTP, ce qui laisse le domaine indépendant de HTTP.
+
+| Situation | Réponse | Effet sur l’état métier |
+|---:30|---:22|---:48|
+| Requête mal formée, champ absent ou invalide | `400` | Aucun : la requête est refusée avant l’application. |
+| Jeton absent ou invalide | `401` (passerelle, ou service s’il est appelé directement) | Aucun : la requête n’atteint pas le contrôleur. |
+| Ressource d’un autre client | `404`, identique à une ressource inexistante | Aucun ; refus journalisé avec le client. |
+| Règle métier (drone inconnu, offre inconnue, type de carte) | `422` | Aucun : la règle est vérifiée avant toute écriture. |
+| Conflit (IMSI déjà associée, clé réutilisée avec un autre contenu) | `409` | Aucun ; la ressource existante est inchangée. |
+| drone-management-service indisponible à la commande | `503` | Rien n’est enregistré ; le rejeu avec la même clé est sûr. |
+| slice-service indisponible à la commande | `201` | Commande enregistrée, éléments `EN_ATTENTE`, relancés au suivi ou au rejeu ; la commande n’est jamais perdue. |
+| slice-service indisponible au suivi | `200` | Dernier état connu ; la relecture reprend au suivi suivant. |
+| Mock en échec, lent ou en erreur | (traitement en arrière-plan) | Demande `ECHOUEE` et service `EN_ECHEC` en une transaction, avec la cause (`ECHEC_SIMULE`, `DELAI_DEPASSE`, `RESEAU_INJOIGNABLE`) ; élément `EN_ECHEC`, commande `PARTIELLE` ou `ECHOUEE`. |
+| Arrêt de slice-service pendant une activation | (au redémarrage) | Les demandes `RECUE` sont relues et rejouées ; la configuration est idempotente. |
+| Service injoignable derrière la passerelle | `500` sans corps | Aucun ; limite de KrakenD CE (ADR-003). |
+
+**Délais d’attente.** Les appels entre services sont bornés à 2 s par tentative, avec une seule reprise, 4 s au total et un disjoncteur. L’appel au réseau est borné à 5 s. La passerelle accorde 5 s par défaut et 10 s aux routes de commande. Une dépendance lente ne peut donc pas bloquer indéfiniment une requête, et les délais s’emboîtent : 4 s d’appel interne restent sous les 10 s de la passerelle (ADR-004).
+
+@@ 8.4 Versionnement et qualité des contrats OpenAPI
+**Versionnement.** La version majeure fait partie du chemin : `/api/{api}/v1/…`. Un changement compatible (champ ajouté, nouvelle opération) reste en `v1`. Un changement incompatible serait publié sous `v2` à côté de `v1`, avec ses routes propres dans la passerelle, le temps que les clients migrent.
+
+**Publication.** Les contrats sont générés depuis le code par Swashbuckle, exportés en YAML dans `docs/openapi/` par `scripts/exporter-contrats.sh`, et servis par Swagger UI sur `http://localhost:8082` (§4.3).
+
+**Règles de complétude, vérifiées par des tests.**
+
+| Règle | Mise en œuvre | Test |
+|---:24|---:44|---:32|
+| Le contrat publié est celui du code | Export par le service lui-même | Un test par service compare le contrat publié à celui de l’API en cours (`ContratOpenApiTests`). |
+| Schémas | DTO avec types, formats (`uuid`, `date-time`), champs obligatoires et `nullable`, contraintes de validation et descriptions (commentaires XML) | Compris dans le test de dérive. |
+| Paramètres | Chemin, requête (`droneId`, `elementId`) et en-têtes (`Idempotency-Key`, `X-Correlation-Id`) décrits avec leur format | Compris dans le test de dérive. |
+| Réponses d’erreur | Chaque code déclaré sur le contrôleur ; `401` et `500` ajoutés partout ; erreurs en `application/problem+json` (`ConventionsContrat`) | Compris dans le test de dérive. |
+| Exemples | Exemple de requête et de chaque réponse, tiré d’appels réels (`ExemplesContrat`) | `ExemplesContratsTests` échoue s’il en manque un (sauf `401` et `500`). |
+| Sécurité | `bearer` sur chaque service ; `oauth2` `clientCredentials` et `bearer` sur la passerelle | `ContratPasserelleTests` : flux et URL du jeton. |
+| Contrat de la passerelle | Assemblé depuis `krakend.json` et les contrats des services | Mêmes routes que la configuration ; aucune route interne ; toute route publique est routée. |
+
+Les contrats décrivent les DTO, jamais les tables, et n’exposent aucune donnée interne : l’IMSI n’apparaît que dans la route interne `identiteReseau`.
+
+@@ 8.5 Sécurité B2B
+**Flux client credentials.** Le client B2B obtient un jeton auprès du Keycloak fourni (`POST /realms/candronex/protocol/openid-connect/token`, `grant_type=client_credentials`, avec son `client_id` et son secret). Le realm est importé tel quel au démarrage. Il émet un JWT RS256 valide 5 minutes, avec l’audience `candronex-api` et l’identité du client dans `azp`. Le client appelle la passerelle avec `Authorization: Bearer`. La passerelle valide le jeton et le transmet sans le modifier, et les services se le transmettent entre eux de la même façon.
+
+**Validation dans chaque service.** Chaque service valide le jeton avec le middleware JwtBearer d’ASP.NET Core, configuré par `Jwt__Emetteur`, `Jwt__Audience` et `Jwt__JwksUrl` :
+
+- signature RS256 seulement, avec les clés du JWKS de Keycloak ;
+- `exp` obligatoire et vérifiée, avec une tolérance d’horloge de 30 s ;
+- `iss` égal à `http://localhost:8081/realms/candronex` ;
+- `aud` contenant `candronex-api` ;
+- claim `azp` présente.
+
+Le client B2B est ensuite lu dans `azp` (`User.ClientB2B()`), jamais dans un en-tête ni dans le corps.
+
+**Limitation de l’accès aux données.** Toutes les tables métier portent `client_id`, et toute lecture ou écriture est filtrée par le client du jeton : `WHERE id = @id AND client_id = @client`. Il n’y a pas de rôles distincts entre clients B2B. CanDroneX ne répond donc jamais `403` : une ressource d’un autre client donne `404`, exactement comme une ressource inexistante, pour ne pas révéler son existence, et le refus est journalisé. Une commande qui vise le drone d’un autre client donne `422` (« drone introuvable parmi vos drones »). Un `X-Client-Id` forgé est retiré par la passerelle et, de toute façon, ignoré par les services.
+
+| Cas | Réponse | Vérifié par |
+|---:40|---:18|---:42|
+| Jeton absent, modifié, non signé (`alg: none`), illisible | `401` | Tests JWT de chaque service ; cas attendus par la passerelle. |
+| Jeton expiré (client `jeton-court`, 5 s) | `401` | Cas attendus. |
+| Autre émetteur, sans audience (`client-management-service`) | `401` | Tests JWT ; cas attendus. |
+| Drone, commande ou service d’un autre client | `404` | Tests d’API de chaque service ; cas attendus. |
+
+**Secrets.** Les secrets des clients de démonstration, de l’administrateur Keycloak et des bases ne sont que dans `.env`, ignoré par Git ; `.env.example` n’en donne que les noms. `docker-compose.yml` ne contient que des références `${…}`. Les jeux de test génèrent leurs propres clés. Les journaux ne contiennent ni jeton ni IMSI. Les résultats k6 versionnés ne contiennent pas le jeton, qui est retiré du résumé.
+
+@@ 8.6 Journalisation et corrélation
+Chaque service écrit une ligne JSON par événement sur la sortie standard (`FormatJournalCompact`). Docker Compose collecte ces lignes.
+
+| Champ | Contenu |
+|---:20|---:80|
+| `ts` | Horodatage UTC à la milliseconde (ISO 8601). |
+| `niveau`, `service` | Niveau (`Information`, `Warning`, `Error`) et nom du service. |
+| `correlationId` | Reçu de la passerelle (`X-Correlation-Id`) ou généré par le premier service. Il est propagé à chaque appel interne et conservé avec la demande d’activation pour le traitement en arrière-plan. |
+| `traceId` | Trace W3C de la requête, propagée par les clients HTTP .NET. |
+| `commandeId` | Ajouté à toutes les lignes qui concernent une commande, dans service-ordering-service et dans slice-service, traitement différé compris. |
+| `categorie`, `message` | Composant à l’origine de la ligne et message lisible ; les valeurs structurées (`elementId`, `serviceId`, `snssai`, `delaiMs`, `cause`…) sont aussi des champs distincts. |
+
+Les événements journalisés couvrent tout le parcours :
+
+- réception de la commande, rejeu et transmission de chaque élément ;
+- réception de la demande d’activation et appel au `NetworkProvisioningPort` (S-NSSAI, DNN, 5QI) ;
+- réponse du mock (latence, association ou refus) ;
+- résultat de l’activation, avec le délai depuis l’acceptation ou la cause ;
+- refus (`401`, `404`, `409`, `422`, `503`), indisponibilité d’une dépendance et reprise au démarrage.
+
+**Retrouver le parcours d’une commande.**
+
+```
+docker compose logs --no-log-prefix service-ordering-service slice-service \
+  | grep '"commandeId":"9b0b35d9-7be8-40f4-b0ec-c0ec7614868e"' | sort
+```
+
+Le tri par `ts` donne le parcours dans l’ordre :
+
+1. commande reçue (ordering) ;
+2. demandes d’activation reçues (slice) ;
+3. éléments transmis (ordering) ;
+4. appels au port réseau (slice) ;
+5. association par le mock, après 551 et 1296 ms ;
+6. activations réussies, 1,1 et 1,9 s après l’acceptation ;
+7. éléments relus au suivi (ordering).
+
+Les lignes issues de la prise de commande partagent le même `correlationId`, ce que vérifie le script des cas attendus.
+
+@@! 9. Décisions d’architecture — ADR
+Les ADR ci-dessous formalisent les décisions structurantes de la Phase 2. Leur source est le journal `docs/decisions-phase2.md`, tenu pendant la conception. Chaque ADR suit les champs du gabarit et renvoie aux sections et fichiers où la décision est mise en œuvre.
+
+## ADR-001 : Découpage en trois services et propriété des données
+
+| Champ | Contenu |
+|---:18|---:82|
+| Statut | Accepté (2026-10-24). |
+| Contexte | Le monolithe modulaire de la Phase 1 doit devenir au moins deux microservices, dont un responsable des slices et d’UC-06, chacun avec sa base. Critères : frontières du domaine (§3.3), propriétaire unique pour chaque donnée, peu d’appels synchrones par commande, et un découpage que la Phase 3 pourra prolonger. |
+| Décision | Trois services : drone-management-service (Drones), service-ordering-service (Commandes et Catalogue) et slice-service (Service Activation et Service Inventory). Chaque service a sa base PostgreSQL dans son conteneur et ne lit jamais celle d’un autre. Les échanges passent par des API REST documentées, sans cycle de dépendance. La commande fige l’offre ; la demande d’activation fige l’offre et l’IMSI. |
+| Conséquences | (+) Chaque service évolue, se teste et se déploie seul ; slice-service est le seul point de contact du réseau. (+) Deux agrégats qui changent dans la même transaction restent dans le même service. (−) Une commande déclenche plusieurs appels synchrones (vérification du drone, puis une demande d’activation et une résolution d’IMSI par élément), qui doivent être bornés et idempotents (ADR-004). (−) L’IMSI est dupliquée dans `slice-db`, ce qui étend le périmètre des renseignements personnels. |
+| Options écartées | **Base commune** : accès plus simples, mais contraire à l’autonomie demandée et au couplage par l’API. **Quatre services (catalogue séparé)** : un appel et un déploiement de plus par commande, sans bénéfice en Phase 2, puisque le catalogue n’est lu qu’à la commande. **Catalogue dans slice-service** : la commande devrait interroger slice-service avant même d’exister. **Activation et inventaire séparés** : ils sont mis à jour dans la même transaction (`activatedAt`), ce qui exigerait une coordination entre deux bases. |
+| Mise en œuvre | §4.1, §5.1, §8.1 ; `services/*/db/init.sql`, `docker-compose.yml`. |
+
+## ADR-002 : NetworkProvisioningPort et MockOpen5GSAdapter
+
+| Champ | Contenu |
+|---:18|---:82|
+| Statut | Accepté (2026-10-24). |
+| Contexte | Aucun cœur 5G n’est disponible en Phase 2, mais Open5GS sera branché en Phase 3. Le réseau doit être simulé de façon réaliste : latence de 300 à 1500 ms, taux d’échec réglable (0 % par défaut), paramètres par variables d’environnement. La logique d’activation doit pouvoir être testée sans réseau, et passer au vrai réseau sans être réécrite. |
+| Décision | L’application définit le port `INetworkProvisioningPort.ConfigurerSliceAsync(imsi, configuration, ct)`, dans les termes du domaine : `Imsi`, `ConfigurationSlice` (S-NSSAI, DNN, 5QI) et un résultat succès ou échec avec sa cause. Le port est idempotent. `MockOpen5GSAdapter`, dans Infrastructure, simule une latence uniforme et un taux d’échec (`MockOpen5GS__LatenceMinMs`, `__LatenceMaxMs`, `__TauxEchec`) et garde les profils d’abonnés en mémoire pour ne jamais associer deux fois la même slice. L’appel est fait en arrière-plan, borné à 5 s. |
+| Conséquences | (+) Le domaine et l’application ne savent rien d’Open5GS ; l’`Open5GSAdapter` de la Phase 3 remplacera le mock en changeant seulement son enregistrement dans `InfrastructureExtensions`. (+) L’échec à 100 % et la reprise se démontrent par une variable d’environnement. (+) Les tests de l’application utilisent un faux port. (−) Les profils du mock sont perdus au redémarrage : sans conséquence en Phase 2, où le réseau simulé repart vide, mais le vrai adaptateur devra assurer l’idempotence côté réseau. (−) Le mock ne simule pas toutes les pannes du vrai réseau (réponses partielles, pertes de session). |
+| Options écartées | **Appel direct à un client réseau dans le service applicatif** : couplerait l’application à une technologie absente en Phase 2. **Mock externe dans son propre conteneur** : plus proche du réseau réel, mais un service de plus, et l’énoncé place le mock dans le service des slices. **Mock sans état** : chaque rejeu « configurerait » de nouveau la slice, ce qui masquerait les doublons au lieu de les empêcher. |
+| Mise en œuvre | §5.2, §6.1, §6.2 ; `SliceService.Application/Ports.cs`, `SliceService.Infrastructure/Reseau/MockOpen5GSAdapter.cs`, variables `MOCK_*` de `.env`. |
+
+## ADR-003 : KrakenD CE comme passerelle, et validation du JWT dans chaque service
+
+| Champ | Contenu |
+|---:18|---:82|
+| Statut | Accepté (2026-10-24), limite « 500 sans corps » comprise. |
+| Contexte | Une passerelle doit être le seul point d’entrée. Le Keycloak fourni ne doit pas être reconfiguré et n’offre aucun compte technique pour les services. Chaque microservice doit valider le jeton : signature, `exp`, `iss`, audience `candronex-api`, claim du client. Les routes internes ne doivent pas être exposées. |
+| Décision | KrakenD CE 2.7.2, configuré de façon déclarative (`krakend.json`) : une route par opération publique, `auth/validator` (RS256, JWKS, émetteur, audience), liste fermée d’en-têtes transmis, encodage `no-op` et CORS. Le jeton du client est transmis tel quel et propagé entre services. Chaque service revalide le jeton et tire le client de `azp`. Quand un service est injoignable, KrakenD CE répond `500` sans corps ; cette limite est acceptée et documentée. |
+| Conséquences | (+) Une configuration courte et lisible, sans code ; la passerelle refuse les jetons invalides avant les services. (+) La défense en profondeur couvre aussi les routes internes, qui ne passent pas par la passerelle. (+) Chaque appel interne s’exécute avec l’identité réelle du client, sans secret supplémentaire. (−) Le jeton est validé deux ou trois fois par requête (coût faible, clés en cache). (−) Une panne de service donne au client un `500` sans corps, qu’il ne peut pas distinguer d’une autre erreur. Le contrat de la passerelle et le script des cas attendus décrivent ce `500` ; une dépendance en panne derrière un service donne un `503` explicite. (−) Un appel interne n’est possible que pendant la requête du client, qui porte un jeton valide 5 minutes : le traitement différé (appel au réseau) n’appelle aucun autre service. |
+| Options écartées | **Plugin Go pour KrakenD ou passerelle à Lua** : permettrait un corps d’erreur, mais ajoute du code compilé à maintenir pour un seul cas. **Autre passerelle (Kong, YARP)** : plus de configuration et un produit de plus à apprendre, alors que KrakenD est recommandé par l’énoncé et déjà utilisé au Labo 05. **Validation à la passerelle seulement** : contraire à l’énoncé et laisserait les routes internes sans contrôle. **Compte technique entre services** : exigerait de modifier le realm fourni. |
+| Mise en œuvre | §4.4, §8.5 ; `krakend/krakend.json`, `services/*/src/*.Api/Securite/`, `tests/Contrats.Tests`. |
+
+## ADR-004 : Échanges synchrones bornés, activation acceptée puis traitée en arrière-plan
+
+| Champ | Contenu |
+|---:18|---:82|
+| Statut | Accepté (2026-10-24). |
+| Contexte | UC-04 puis UC-06 traversent trois services, et le réseau répond en 0,3 à 1,5 s. À 600 op/s, environ 360 activations par seconde sont demandées. Le P95 de `activatedAt − acceptedAt` doit rester sous 5 s, aucune commande ne doit être perdue ni dupliquée, et la Phase 2 n’a pas de courtier de messages. |
+| Décision | Appels REST synchrones bornés (2 s par tentative, une reprise, 4 s au total, disjoncteur), et seulement vers des API idempotentes. La commande est acceptée (`201`) dès qu’elle est enregistrée. Chaque élément est transmis à slice-service, qui enregistre la demande, répond `202`, puis l’active en arrière-plan par une file en mémoire (`Channel`, 500 activations simultanées au plus). L’état remonte en *pull* : la commande relit les activations quand le client la suit. Un drone injoignable donne `503`, rien n’est enregistré ; un slice-service injoignable laisse l’élément `EN_ATTENTE`, relancé au suivi ou au rejeu. Au démarrage, slice-service reprend les demandes non terminées. |
+| Conséquences | (+) La prise de commande ne dépend pas de la latence du réseau, et le P95 mesuré est de 1,5 à 1,6 s. (+) Le graphe d’appels est sans cycle. (+) Une panne de slice-service ne fait perdre aucune commande. (−) L’état d’une commande n’est à jour que lorsqu’on la consulte, sans notification. (−) La file en mémoire limite slice-service à une instance ; la reprise au démarrage compense la perte de la file. (−) Une commande coûte plusieurs appels internes synchrones. |
+| Options écartées | **Activation synchrone pendant la commande** : la réponse attendrait jusqu’à 1,5 s par slice, et une panne du réseau ferait échouer la commande. **Courtier de messages (Kafka, RabbitMQ)** : la bonne cible à plusieurs instances, réservée à la Phase 3 ; il ajouterait en Phase 2 une infrastructure et une livraison « au moins une fois » à traiter. **Notification de slice-service vers la commande (push)** : créerait un cycle de dépendance, et le traitement différé n’a pas de jeton valide pour appeler. **Refuser la commande si slice-service est indisponible** : perdrait des commandes déjà validées. |
+| Mise en œuvre | §4.2, §6.1, §8.3 ; `ServiceOrdering.Infrastructure/InfrastructureExtensions.cs`, `SliceService.Infrastructure/Traitement/ProcesseurActivations.cs`. |
+
+## ADR-005 : Pool de connexions limité et état EN_COURS non persisté
+
+| Champ | Contenu |
+|---:18|---:82|
+| Statut | Accepté (2026-10-24), à la suite de la campagne de mesure (§10.4). |
+| Contexte | La première mesure complète à 600 op/s n’a pas tenu. Avec un pool de 200 connexions, slice-service dépassait les 100 connexions de PostgreSQL : erreurs « too many clients », disjoncteur ouvert, éléments bloqués en attente. Une fois le pool corrigé, `slice-db` ralentissait après 4 minutes : file en croissance et P95 de 3,75 s. Chaque activation faisait trois écritures (réception, passage à `EN_COURS`, résultat) sur une base devenue plus grande que son cache. |
+| Décision | Limiter chaque service à 80 connexions (`Maximum Pool Size=80`) : sous charge, une requête attend une connexion libre au lieu d’échouer. Ne plus persister `EN_COURS` : la demande n’y passe qu’en mémoire, quand le processeur la prend dans la file, ce qui laisse deux écritures par activation et aucune avant l’appel réseau. Régler PostgreSQL pour `slice-db` et `ordering-db` : `shared_buffers` 512 Mo, `max_wal_size` 4 Go, `checkpoint_timeout` 15 min. |
+| Conséquences | (+) 603 à 606 op/s sans erreur, file stable et P95 de 1,5 à 1,6 s (exécutions B et C). (+) La reprise au démarrage est plus simple : toute demande `RECUE` est à rejouer, et la configuration idempotente rend le rejeu sûr même si l’appel avait déjà eu lieu. (−) Pendant une activation, l’API montre `RECUE` plutôt que `EN_COURS` ; c’est sans effet pour le client, qui suit l’état de l’élément `EN_ACTIVATION`. (−) Les réglages PostgreSQL visent ce poste de mesure ; il faudra les revoir pour un autre environnement. |
+| Options écartées | **Augmenter max_connections de PostgreSQL** : déplace le problème (plus de mémoire, plus de contention) sans borner la charge. **Garder EN_COURS et regrouper les écritures par lots** : plus complexe, et le gain est le même. **Ajouter des instances de slice-service** : impossible avec la file en mémoire (ADR-004), et réservé à la Phase 3. |
+| Mise en œuvre | §6.2, §10.4 ; `docker-compose.yml` (chaînes de connexion, `command` des bases), `SliceService.Application/TraitementActivations.cs`, `docs/mesures-phase2.md`. |

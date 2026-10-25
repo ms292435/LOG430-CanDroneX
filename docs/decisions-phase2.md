@@ -58,7 +58,7 @@ slice-service            ──► MockOpen5GSAdapter         (NetworkProvisioni
 | Slice injoignable au POST de la commande | Commande enregistrée (201), élément `EN_ATTENTE` ; l'envoi est relancé au prochain GET ou au rejeu du POST. La commande n'est jamais perdue. |
 | Mock lent | Délai d'attente configurable (5 s par défaut) ; au-delà, l'activation échoue (`DELAI_DEPASSE`). |
 | Mock en échec | `ECHOUEE` / `EN_ECHEC` avec la cause ; pas de reprise automatique (UC-10, Phase 3). |
-| Redémarrage de Slice | Les demandes `RECUE` ou `EN_COURS` sont relancées au démarrage (le mock est idempotent). |
+| Redémarrage de Slice | Les demandes `RECUE` sont relancées au démarrage (le mock est idempotent) ; `EN_COURS` n'est pas persisté. |
 
 Le traitement des activations utilise une file en mémoire (`Channel`) à concurrence bornée (environ 500), alimentée après la persistance de la demande. À 600 opérations/s, environ 360 activations/s restent chacune environ 0,9 s dans le mock : environ 350 activations simultanées.
 
@@ -76,7 +76,7 @@ Le traitement des activations utilise une file en mémoire (`Channel`) à concur
 - **Port réseau** : `INetworkProvisioningPort.ConfigurerSliceAsync(imsi, configuration)`, défini dans la couche application. La configuration (`ConfigurationSlice` : S-NSSAI, DNN, 5QI) est un objet du domaine interprété depuis les caractéristiques figées ; une configuration incomplète est refusée dès la réception (422).
 - **MockOpen5GSAdapter** : latence uniforme entre `MockOpen5GS__LatenceMinMs` et `MockOpen5GS__LatenceMaxMs`, refus avec la probabilité `MockOpen5GS__TauxEchec`. Il tient en mémoire les profils d'abonnés (IMSI → slices) : une slice déjà associée n'est pas configurée une seconde fois.
 - **Réception** : la demande, l'IMSI résolue et le service d'inventaire (`EN_ACTIVATION`) sont enregistrés dans une même transaction, puis la demande entre dans la file. Une demande dont l'élément existe déjà retourne 200 avec son suivi, sans nouvelle configuration.
-- **Traitement** : `RECUE → EN_COURS` (persisté), appel au port avec un délai d'attente (5 s), puis demande et service mis à jour ensemble. Erreur de l'adaptateur : `RESEAU_INJOIGNABLE` ; délai dépassé : `DELAI_DEPASSE` ; refus : `ECHEC_SIMULE`.
+- **Traitement** : `RECUE → EN_COURS` (en mémoire seulement depuis la campagne de mesure, voir ADR-005), appel au port avec un délai d'attente (5 s), puis demande et service mis à jour ensemble. Erreur de l'adaptateur : `RESEAU_INJOIGNABLE` ; délai dépassé : `DELAI_DEPASSE` ; refus : `ECHEC_SIMULE`.
 - **Traçabilité** : la demande conserve le `X-Correlation-Id` de la requête d'origine, repris avec le `commandeId` dans les journaux du traitement différé.
 - **IMSI** : conservée dans la base de slice-service (contexte Activation seulement), car le traitement est différé ; jamais retournée par l'API ni écrite dans les journaux.
 
