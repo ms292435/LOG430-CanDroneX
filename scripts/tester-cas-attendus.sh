@@ -156,6 +156,12 @@ for service in service-ordering-service slice-service; do
   verifier "commande $TRACE retrouvée dans $service" 1 \
     "$(docker compose logs --no-log-prefix "$service" 2>/dev/null | grep -q "\"commandeId\":\"$TRACE\"" && echo 1 || echo 0)" "docker compose logs"
 done
+# Sans X-Correlation-Id fourni, l'identifiant généré à la prise de commande suit l'activation jusque dans slice-service.
+CID_COMMANDE=$(docker compose logs --no-log-prefix service-ordering-service 2>/dev/null | grep "\"commandeId\":\"$TRACE\"" \
+  | grep 'reçue du client' | grep -o '"correlationId":"[^"]*"' | head -1)
+verifier "commande $TRACE : correlationId de la prise de commande repris par l'activation" 1 \
+  "$(docker compose logs --no-log-prefix slice-service 2>/dev/null | grep "\"commandeId\":\"$TRACE\"" | grep 'Activation réussie' \
+     | grep -c -- "${CID_COMMANDE:-absent}")" "docker compose logs"
 verifier "CORS : préflight autorisé (Authorization, X-Correlation-Id)" 1 "$(curl -s -D - -o /dev/null -X OPTIONS "$GW/api/drone-management/v1/drone" \
   -H 'Origin: http://exemple.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,x-correlation-id' \
   | grep -ci '^access-control-allow-headers:.*x-correlation-id')" "Passerelle"

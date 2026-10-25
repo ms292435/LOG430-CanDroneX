@@ -27,6 +27,8 @@ public sealed partial class CorrelationMiddleware
         var correlationId = FormatValide().IsMatch(recu) ? recu : Guid.NewGuid().ToString();
 
         contexte.Items[CleContexte] = correlationId;
+        // Valeur effective dans la requête : les appels aux autres services la propagent, même générée ici.
+        contexte.Request.Headers[Entete] = correlationId;
         contexte.Response.OnStarting(() =>
         {
             contexte.Response.Headers[Entete] = correlationId;
