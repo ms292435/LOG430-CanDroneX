@@ -30,6 +30,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/EnregistrerDroneRequete'
+            example:
+              identifiantMetier: DRN-0231
+              imsi: '302720100000231'
+              typeCarte: SIM
+              modele: DJI Matrice 300 RTK
         required: true
       responses:
         '401':
@@ -54,6 +59,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DroneReponse'
+              example:
+                id: 00000000-0000-0000-0000-000000000231
+                identifiantMetier: DRN-0231
+                modele: DJI Matrice 300 RTK
+                typeCarte: SIM
+                statut: ENREGISTRE
+                dateEnregistrement: '2026-10-01T12:00:00+00:00'
         '400':
           description: Champ absent ou mal formé.
           headers:
@@ -65,6 +77,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ValidationProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+                title: One or more validation errors occurred.
+                status: 400
+                instance: /api/drone-management/v1/drone
+                errors:
+                  Imsi:
+                    - L'IMSI doit contenir 14 ou 15 chiffres.
+                  Modele:
+                    - Le modèle est obligatoire.
+                traceId: 00-75568c0fe45ccfc339bfdb18220b24a8-32eb32f000954802-00
+                correlationId: cmd-0042
         '409':
           description: 'IMSI déjà associée à un drone, ou identifiant métier déjà utilisé par ce client.'
           headers:
@@ -76,6 +100,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.10
+                title: Conflit
+                status: 409
+                detail: Cette IMSI est déjà associée à un drone.
+                instance: /api/drone-management/v1/drone
+                traceId: 00-3d21fd6ac3459aa6d1e44f809a6fcfd6-69b8d71e6969092e-00
+                correlationId: cmd-0042
         '422':
           description: Règle métier non respectée.
           headers:
@@ -87,6 +119,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc4918#section-11.2
+                title: Règle métier non respectée
+                status: 422
+                detail: Le type de carte doit être SIM ou eSIM.
+                instance: /api/drone-management/v1/drone
+                traceId: 00-1f0c8e2a9b7d4c3e5a6b7c8d9e0f1a2b-3c4d5e6f7a8b9c0d-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -136,6 +176,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DroneReponse'
+              example:
+                - id: 00000000-0000-0000-0000-000000000231
+                  identifiantMetier: DRN-0231
+                  modele: DJI Matrice 300 RTK
+                  typeCarte: SIM
+                  statut: ENREGISTRE
+                  dateEnregistrement: '2026-10-01T12:00:00+00:00'
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -190,6 +237,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DroneReponse'
+              example:
+                id: 00000000-0000-0000-0000-000000000231
+                identifiantMetier: DRN-0231
+                modele: DJI Matrice 300 RTK
+                typeCarte: SIM
+                statut: ENREGISTRE
+                dateEnregistrement: '2026-10-01T12:00:00+00:00'
         '404':
           description: 'Drone inexistant ou appartenant à un autre client, sans distinction.'
           headers:
@@ -201,6 +255,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+                title: Introuvable
+                status: 404
+                detail: Aucun drone ne correspond à cet identifiant.
+                instance: /api/drone-management/v1/drone/00000000-0000-0000-0000-000000000500
+                traceId: 00-bbaa8bc00500623924fcefd6f869ae50-de3ced1d1c7dc996-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -255,6 +317,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IdentiteReseauReponse'
+              example:
+                droneId: 00000000-0000-0000-0000-000000000231
+                imsi: '302720100000231'
+                typeCarte: SIM
         '404':
           description: 'Drone inexistant ou appartenant à un autre client, sans distinction.'
           headers:
@@ -266,6 +332,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+                title: Introuvable
+                status: 404
+                detail: Aucun drone ne correspond à cet identifiant.
+                instance: /api/drone-management/v1/drone/00000000-0000-0000-0000-000000000500/identiteReseau
+                traceId: 00-bbaa8bc00500623924fcefd6f869ae50-de3ced1d1c7dc996-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:

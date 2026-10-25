@@ -50,6 +50,45 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SpecificationReponse'
+              example:
+                - id: C2_URLLC
+                  nom: C2 / URLLC
+                  description: 'Commande, contrôle et télémétrie du drone : faible latence, haute fiabilité, priorité élevée.'
+                  version: '1.0'
+                  caracteristiques:
+                    - nom: sst
+                      valeur: '2'
+                    - nom: sd
+                      valeur: '000001'
+                    - nom: dnn
+                      valeur: c2.candronex
+                    - nom: 5qi
+                      valeur: '82'
+                    - nom: latenceMaxMs
+                      valeur: '10'
+                    - nom: fiabilite
+                      valeur: '99.999'
+                    - nom: debitMontantMbps
+                      valeur: '1'
+                - id: IMAGERIE_EMBB
+                  nom: Imagerie / eMBB
+                  description: 'Transmission des images et de la vidéo de mission : débit montant élevé, latence moins critique.'
+                  version: '1.0'
+                  caracteristiques:
+                    - nom: sst
+                      valeur: '1'
+                    - nom: sd
+                      valeur: '000002'
+                    - nom: dnn
+                      valeur: imagerie.candronex
+                    - nom: 5qi
+                      valeur: '4'
+                    - nom: latenceMaxMs
+                      valeur: '100'
+                    - nom: fiabilite
+                      valeur: '99.9'
+                    - nom: debitMontantMbps
+                      valeur: '50'
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -103,6 +142,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpecificationReponse'
+              example:
+                id: C2_URLLC
+                nom: C2 / URLLC
+                description: 'Commande, contrôle et télémétrie du drone : faible latence, haute fiabilité, priorité élevée.'
+                version: '1.0'
+                caracteristiques:
+                  - nom: sst
+                    valeur: '2'
+                  - nom: sd
+                    valeur: '000001'
+                  - nom: dnn
+                    valeur: c2.candronex
+                  - nom: 5qi
+                    valeur: '82'
+                  - nom: latenceMaxMs
+                    valeur: '10'
+                  - nom: fiabilite
+                    valeur: '99.999'
+                  - nom: debitMontantMbps
+                    valeur: '1'
         '404':
           description: Offre inexistante.
           headers:
@@ -114,6 +173,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+                title: Introuvable
+                status: 404
+                detail: Aucune offre ne correspond à cet identifiant.
+                instance: /api/service-catalog/v1/serviceSpecification/C2_MMTC
+                traceId: 00-3dacc8e1fc179766da8488e6f96bacd7-91b2df23b458810c-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -153,6 +220,14 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PasserCommandeRequete'
+            example:
+              elements:
+                - droneId: 00000000-0000-0000-0000-000000000231
+                  action: AJOUTER
+                  specification: C2_URLLC
+                - droneId: 00000000-0000-0000-0000-000000000231
+                  action: AJOUTER
+                  specification: IMAGERIE_EMBB
         required: true
       responses:
         '401':
@@ -177,6 +252,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandeReponse'
+              example:
+                id: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                etat: EN_COURS
+                acceptedAt: '2026-10-24T21:29:29.536Z'
+                elements:
+                  - id: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: C2_URLLC
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '2'
+                      - nom: sd
+                        valeur: '000001'
+                      - nom: dnn
+                        valeur: c2.candronex
+                      - nom: 5qi
+                        valeur: '82'
+                      - nom: latenceMaxMs
+                        valeur: '10'
+                      - nom: fiabilite
+                        valeur: '99.999'
+                      - nom: debitMontantMbps
+                        valeur: '1'
+                    etat: EN_ACTIVATION
+                    causeEchec: 
+                    serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                    activatedAt: 
+                  - id: a587db15-86d5-43cb-bd22-bcdea78cacb1
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: IMAGERIE_EMBB
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '1'
+                      - nom: sd
+                        valeur: '000002'
+                      - nom: dnn
+                        valeur: imagerie.candronex
+                      - nom: 5qi
+                        valeur: '4'
+                      - nom: latenceMaxMs
+                        valeur: '100'
+                      - nom: fiabilite
+                        valeur: '99.9'
+                      - nom: debitMontantMbps
+                        valeur: '50'
+                    etat: EN_ACTIVATION
+                    causeEchec: 
+                    serviceId: efdb1565-a2e5-4515-97ba-c0c2f94924e1
+                    activatedAt: 
         '200':
           description: 'Rejeu d''une demande déjà acceptée avec cette clé : la commande existante est retournée.'
           headers:
@@ -188,6 +316,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandeReponse'
+              example:
+                id: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                etat: COMPLETEE
+                acceptedAt: '2026-10-24T21:29:29.536Z'
+                elements:
+                  - id: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: C2_URLLC
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '2'
+                      - nom: sd
+                        valeur: '000001'
+                      - nom: dnn
+                        valeur: c2.candronex
+                      - nom: 5qi
+                        valeur: '82'
+                      - nom: latenceMaxMs
+                        valeur: '10'
+                      - nom: fiabilite
+                        valeur: '99.999'
+                      - nom: debitMontantMbps
+                        valeur: '1'
+                    etat: ACTIF
+                    causeEchec: 
+                    serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                    activatedAt: '2026-10-24T21:29:31.409Z'
+                  - id: a587db15-86d5-43cb-bd22-bcdea78cacb1
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: IMAGERIE_EMBB
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '1'
+                      - nom: sd
+                        valeur: '000002'
+                      - nom: dnn
+                        valeur: imagerie.candronex
+                      - nom: 5qi
+                        valeur: '4'
+                      - nom: latenceMaxMs
+                        valeur: '100'
+                      - nom: fiabilite
+                        valeur: '99.9'
+                      - nom: debitMontantMbps
+                        valeur: '50'
+                    etat: ACTIF
+                    causeEchec: 
+                    serviceId: efdb1565-a2e5-4515-97ba-c0c2f94924e1
+                    activatedAt: '2026-10-24T21:29:30.669Z'
         '400':
           description: Champ ou en-tête Idempotency-Key absent ou mal formé.
           headers:
@@ -199,6 +380,16 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ValidationProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+                title: One or more validation errors occurred.
+                status: 400
+                instance: /api/service-ordering/v1/serviceOrder
+                errors:
+                  Idempotency-Key:
+                    - L'en-tête Idempotency-Key est obligatoire.
+                traceId: 00-6a1b2c3d4e5f60718293a4b5c6d7e8f9-0a1b2c3d4e5f6071-00
+                correlationId: cmd-0042
         '409':
           description: Clé d'idempotence déjà utilisée pour une commande au contenu différent.
           headers:
@@ -210,6 +401,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.10
+                title: Conflit
+                status: 409
+                detail: La clé d'idempotence « demo-0001 » a déjà été utilisée pour une commande au contenu différent.
+                instance: /api/service-ordering/v1/serviceOrder
+                traceId: 00-3dacc8e1fc179766da8488e6f96bacd7-91b2df23b458810c-00
+                correlationId: cmd-0042
         '422':
           description: 'Offre absente du catalogue, drone inconnu, service demandé deux fois pour un drone, action non prise en charge.'
           headers:
@@ -221,6 +420,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc4918#section-11.2
+                title: Règle métier non respectée
+                status: 422
+                detail: Le drone 00000000-0000-0000-0000-000000000500 est introuvable parmi vos drones.
+                instance: /api/service-ordering/v1/serviceOrder
+                traceId: 00-3dacc8e1fc179766da8488e6f96bacd7-91b2df23b458810c-00
+                correlationId: cmd-0042
         '503':
           description: Le registre des drones ne répond pas ; rien n'a été enregistré.
           headers:
@@ -232,6 +439,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.6.4
+                title: Service indisponible
+                status: 503
+                detail: Le service drone-management-service est momentanément indisponible. Réessayez avec la même clé d'idempotence.
+                instance: /api/service-ordering/v1/serviceOrder
+                traceId: 00-3dacc8e1fc179766da8488e6f96bacd7-91b2df23b458810c-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -286,6 +501,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandeReponse'
+              example:
+                id: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                etat: PARTIELLE
+                acceptedAt: '2026-10-24T21:29:29.536Z'
+                elements:
+                  - id: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: C2_URLLC
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '2'
+                      - nom: sd
+                        valeur: '000001'
+                      - nom: dnn
+                        valeur: c2.candronex
+                      - nom: 5qi
+                        valeur: '82'
+                      - nom: latenceMaxMs
+                        valeur: '10'
+                      - nom: fiabilite
+                        valeur: '99.999'
+                      - nom: debitMontantMbps
+                        valeur: '1'
+                    etat: ACTIF
+                    causeEchec: 
+                    serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                    activatedAt: '2026-10-24T21:29:31.409Z'
+                  - id: a587db15-86d5-43cb-bd22-bcdea78cacb1
+                    droneId: 00000000-0000-0000-0000-000000000231
+                    action: AJOUTER
+                    specification: IMAGERIE_EMBB
+                    versionSpecification: '1.0'
+                    caracteristiques:
+                      - nom: sst
+                        valeur: '1'
+                      - nom: sd
+                        valeur: '000002'
+                      - nom: dnn
+                        valeur: imagerie.candronex
+                      - nom: 5qi
+                        valeur: '4'
+                      - nom: latenceMaxMs
+                        valeur: '100'
+                      - nom: fiabilite
+                        valeur: '99.9'
+                      - nom: debitMontantMbps
+                        valeur: '50'
+                    etat: EN_ECHEC
+                    causeEchec: 'ECHEC_SIMULE : le cœur 5G simulé a refusé la configuration.'
+                    serviceId: efdb1565-a2e5-4515-97ba-c0c2f94924e1
+                    activatedAt: 
         '404':
           description: 'Commande inexistante ou appartenant à un autre client, sans distinction.'
           headers:
@@ -297,6 +565,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+                title: Introuvable
+                status: 404
+                detail: Aucune commande ne correspond à cet identifiant.
+                instance: /api/service-ordering/v1/serviceOrder/9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                traceId: 00-3dacc8e1fc179766da8488e6f96bacd7-91b2df23b458810c-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:

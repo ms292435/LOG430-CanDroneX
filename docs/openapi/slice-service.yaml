@@ -30,6 +30,29 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/DemandeActivationRequete'
+            example:
+              elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+              commandeId: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+              droneId: 00000000-0000-0000-0000-000000000231
+              action: AJOUTER
+              specification: C2_URLLC
+              versionSpecification: '1.0'
+              caracteristiques:
+                - nom: sst
+                  valeur: '2'
+                - nom: sd
+                  valeur: '000001'
+                - nom: dnn
+                  valeur: c2.candronex
+                - nom: 5qi
+                  valeur: '82'
+                - nom: latenceMaxMs
+                  valeur: '10'
+                - nom: fiabilite
+                  valeur: '99.999'
+                - nom: debitMontantMbps
+                  valeur: '1'
+              acceptedAt: '2026-10-24T21:29:29.536Z'
         required: true
       responses:
         '401':
@@ -54,6 +77,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuiviActivationReponse'
+              example:
+                elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                etat: RECUE
+                activatedAt: 
+                cause: 
         '200':
           description: 'L''élément avait déjà une demande : son suivi est retourné.'
           headers:
@@ -65,6 +94,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuiviActivationReponse'
+              example:
+                elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                etat: REUSSIE
+                activatedAt: '2026-10-24T21:29:31.409Z'
+                cause: 
         '400':
           description: Champ absent ou mal formé.
           headers:
@@ -76,6 +111,16 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ValidationProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+                title: One or more validation errors occurred.
+                status: 400
+                instance: /api/service-activation/v1/activation
+                errors:
+                  AcceptedAt:
+                    - The AcceptedAt field is required.
+                traceId: 00-4e5f60718293a4b5c6d7e8f90a1b2c3d-8293a4b5c6d7e8f9-00
+                correlationId: cmd-0042
         '422':
           description: 'Drone inconnu du client, action non prise en charge ou caractéristiques réseau incomplètes.'
           headers:
@@ -87,6 +132,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc4918#section-11.2
+                title: Règle métier non respectée
+                status: 422
+                detail: Le drone 00000000-0000-0000-0000-000000000500 est introuvable parmi les drones du client.
+                instance: /api/service-activation/v1/activation
+                traceId: 00-4e5f60718293a4b5c6d7e8f90a1b2c3d-8293a4b5c6d7e8f9-00
+                correlationId: cmd-0042
         '503':
           description: Le registre des drones ne répond pas ; rien n'a été enregistré.
           headers:
@@ -98,6 +151,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.6.4
+                title: Service indisponible
+                status: 503
+                detail: 'Le service drone-management-service est momentanément indisponible. Réessayez la même demande : elle est idempotente.'
+                instance: /api/service-activation/v1/activation
+                traceId: 00-4e5f60718293a4b5c6d7e8f90a1b2c3d-8293a4b5c6d7e8f9-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -155,6 +216,17 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SuiviActivationReponse'
+              example:
+                - elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                  serviceId: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                  etat: REUSSIE
+                  activatedAt: '2026-10-24T21:29:31.409Z'
+                  cause: 
+                - elementId: a587db15-86d5-43cb-bd22-bcdea78cacb1
+                  serviceId: efdb1565-a2e5-4515-97ba-c0c2f94924e1
+                  etat: ECHOUEE
+                  activatedAt: 
+                  cause: 'ECHEC_SIMULE : le cœur 5G simulé a refusé la configuration.'
         '400':
           description: Bad Request
           headers:
@@ -166,6 +238,16 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ValidationProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+                title: One or more validation errors occurred.
+                status: 400
+                instance: /api/service-activation/v1/activation
+                errors:
+                  elementId:
+                    - Indiquez de 1 à 100 éléments à suivre.
+                traceId: 00-4e5f60718293a4b5c6d7e8f90a1b2c3d-8293a4b5c6d7e8f9-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -222,6 +304,53 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ServiceReponse'
+              example:
+                - id: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                  droneId: 00000000-0000-0000-0000-000000000231
+                  specification: C2_URLLC
+                  caracteristiques:
+                    - nom: sst
+                      valeur: '2'
+                    - nom: sd
+                      valeur: '000001'
+                    - nom: dnn
+                      valeur: c2.candronex
+                    - nom: 5qi
+                      valeur: '82'
+                    - nom: latenceMaxMs
+                      valeur: '10'
+                    - nom: fiabilite
+                      valeur: '99.999'
+                    - nom: debitMontantMbps
+                      valeur: '1'
+                  etat: ACTIF
+                  activatedAt: '2026-10-24T21:29:31.409Z'
+                  causeEchec: 
+                  commandeId: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                  elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
+                - id: efdb1565-a2e5-4515-97ba-c0c2f94924e1
+                  droneId: 00000000-0000-0000-0000-000000000231
+                  specification: IMAGERIE_EMBB
+                  caracteristiques:
+                    - nom: sst
+                      valeur: '1'
+                    - nom: sd
+                      valeur: '000002'
+                    - nom: dnn
+                      valeur: imagerie.candronex
+                    - nom: 5qi
+                      valeur: '4'
+                    - nom: latenceMaxMs
+                      valeur: '100'
+                    - nom: fiabilite
+                      valeur: '99.9'
+                    - nom: debitMontantMbps
+                      valeur: '50'
+                  etat: EN_ECHEC
+                  activatedAt: 
+                  causeEchec: 'ECHEC_SIMULE : le cœur 5G simulé a refusé la configuration.'
+                  commandeId: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                  elementId: a587db15-86d5-43cb-bd22-bcdea78cacb1
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:
@@ -276,6 +405,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServiceReponse'
+              example:
+                id: 391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                droneId: 00000000-0000-0000-0000-000000000231
+                specification: C2_URLLC
+                caracteristiques:
+                  - nom: sst
+                    valeur: '2'
+                  - nom: sd
+                    valeur: '000001'
+                  - nom: dnn
+                    valeur: c2.candronex
+                  - nom: 5qi
+                    valeur: '82'
+                  - nom: latenceMaxMs
+                    valeur: '10'
+                  - nom: fiabilite
+                    valeur: '99.999'
+                  - nom: debitMontantMbps
+                    valeur: '1'
+                etat: ACTIF
+                activatedAt: '2026-10-24T21:29:31.409Z'
+                causeEchec: 
+                commandeId: 9b0b35d9-7be8-40f4-b0ec-c0ec7614868e
+                elementId: abbda7ec-62fc-4d9d-b43d-f0edeffce501
         '404':
           description: 'Service inexistant ou appartenant à un autre client, sans distinction.'
           headers:
@@ -287,6 +440,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+                title: Introuvable
+                status: 404
+                detail: Aucun service ne correspond à cet identifiant.
+                instance: /api/service-inventory/v1/service/391f3db0-c60f-4b1d-9759-7ae2975bbd0a
+                traceId: 00-4e5f60718293a4b5c6d7e8f90a1b2c3d-8293a4b5c6d7e8f9-00
+                correlationId: cmd-0042
         '500':
           description: 'Erreur inattendue, sans détail interne.'
           headers:

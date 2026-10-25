@@ -62,6 +62,7 @@ builder.Services.AddSwaggerGen(options =>
     // Après les commentaires XML : les conventions s'appliquent aux textes qu'ils ont produits.
     options.OperationFilter<ConventionsContrat>();
     options.SchemaFilter<ConventionsContrat>();
+    options.OperationFilter<ExemplesContrat>();
 });
 
 var app = builder.Build();
