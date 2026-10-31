@@ -800,3 +800,209 @@ Les ADR ci-dessous formalisent les décisions structurantes de la Phase 2. Leur 
 | Conséquences | (+) 603 à 606 op/s sans erreur, file stable et P95 de 1,5 à 1,6 s (exécutions B et C). (+) La reprise au démarrage est plus simple : toute demande `RECUE` est à rejouer, et la configuration idempotente rend le rejeu sûr même si l’appel avait déjà eu lieu. (−) Pendant une activation, l’API montre `RECUE` plutôt que `EN_COURS` ; c’est sans effet pour le client, qui suit l’état de l’élément `EN_ACTIVATION`. (−) Les réglages PostgreSQL visent ce poste de mesure ; il faudra les revoir pour un autre environnement. |
 | Options écartées | **Augmenter max_connections de PostgreSQL** : déplace le problème (plus de mémoire, plus de contention) sans borner la charge. **Garder EN_COURS et regrouper les écritures par lots** : plus complexe, et le gain est le même. **Ajouter des instances de slice-service** : impossible avec la file en mémoire (ADR-004), et réservé à la Phase 3. |
 | Mise en œuvre | §6.2, §10.4 ; `docker-compose.yml` (chaînes de connexion, `command` des bases), `SliceService.Application/TraitementActivations.cs`, `docs/mesures-phase2.md`. |
+
+@@ 10.1 Attributs de qualité prioritaires
+Les cinq attributs du §1.3 sont repris ici avec leur preuve. Le délai d’activation et le débit, obligatoires, relèvent de la performance.
+
+| Attribut de qualité | Motivation | Décision d’architecture | Vérification et résultat |
+|---:14|---:26|---:30|---:30|
+| Performance | P95 de `activatedAt − acceptedAt` ≤ 5 s ; débit ≥ 600 op/s (1 min de montée, 5 min à taux constant). | Activation acceptée puis traitée en arrière-plan (ADR-004) ; pools limités, `EN_COURS` non persisté, bases réglées (ADR-005). | Mesure k6 et requête SQL (§10.4) : P95 de 1,52 à 1,61 s, de 603 à 606 op/s, 0 % d’erreurs ; 5 à 101 itérations abandonnées (écart expliqué). |
+| Sécurité | Un client B2B n’accède qu’à ses ressources ; l’IMSI est un renseignement personnel. | JWT validé par la passerelle et par chaque service ; client lu dans `azp` ; filtrage par `client_id` ; `404` interclient ; IMSI jamais exposée (ADR-003). | Tests JWT et interclients des trois API ; 52 cas par la passerelle (jetons absents, modifiés, expirés, sans audience ; accès d’`aerotech-demo` aux données d’`inspectra-demo`). |
+| Fiabilité et cohérence | Ni doublon ni état incohérent après une répétition ou une panne ; aucune commande perdue. | Idempotence à quatre niveaux (§8.2) ; transactions locales ; états qui ne reculent pas ; reprise au démarrage. | Tests de rejeu, de rejeu simultané et de lecture concurrente ; cas « rejeu sans doublon » par la passerelle. |
+| Disponibilité | La panne d’un service ne bloque pas tout le parcours. | Appels bornés, une reprise, disjoncteur ; commande acceptée et relancée si slice-service est arrêté (ADR-004). | Cas attendus : drone-management-service arrêté (`503`, rien d’enregistré), slice-service arrêté (`201`, puis `COMPLETEE` à son retour). |
+| Extensibilité | Open5GS remplacera le réseau simulé en Phase 3. | `NetworkProvisioningPort` défini par l’application ; domaine sans dépendance (ADR-002). | Le domaine compile sans aucune référence ; les tests de l’application utilisent un faux port, ceux de l’infrastructure le mock. |
+
+@@ 10.2 Scénarios de qualité
+| ID | Stimulus | Réponse attendue | Vérification |
+|---:6|---:28|---:36|---:30|
+| Q1 | Un appel arrive sans jeton, ou avec un jeton modifié, non signé, expiré, d’un autre émetteur ou sans l’audience `candronex-api`. | `401` à la passerelle (et au service s’il est appelé directement) ; aucune donnée lue ni modifiée. | Tests JWT des trois API ; 7 formes de jeton invalide par la passerelle. |
+| Q2 | `aerotech-demo` demande un drone, une commande ou un service d’`inspectra-demo`, ou commande pour son drone. | `404` comme pour une ressource inexistante (`422` pour la commande) ; rien n’est révélé ni enregistré ; refus journalisé. | Tests d’API interclients ; cas par la passerelle, dont un `X-Client-Id` forgé. |
+| Q3 | drone-management-service est arrêté pendant une prise de commande. | `503` Problem Details en 4 s au plus ; rien n’est enregistré ; le rejeu avec la même clé réussit au retour du service. | Test d’API (`503`) ; cas attendu « registre des drones arrêté ». |
+| Q4 | slice-service est arrêté pendant une prise de commande. | `201` : commande enregistrée, éléments `EN_ATTENTE` ; au retour du service, le suivi relance l’envoi et la commande devient `COMPLETEE`. | Test de l’application ; cas attendu « slice-service revenu : envoi relancé ». |
+| Q5 | Le réseau simulé refuse toutes les configurations (`MOCK_TAUX_ECHEC=1`). | Services `EN_ECHEC` avec la cause `ECHEC_SIMULE` ; commande `ECHOUEE` ; aucune association créée. | Test d’API à 100 % d’échec ; tests du mock ; cas attendu « activation en échec ». |
+| Q6 | Le réseau ne répond pas dans les 5 s. | Demande `ECHOUEE` (`DELAI_DEPASSE`), service `EN_ECHEC` ; aucune association. | Tests de l’application et du mock (appel annulé par le délai). |
+| Q7 | Le client rejoue sa commande avec la même clé, éventuellement deux fois en même temps. | `200` avec la même commande ; aucun nouvel élément, demande, service ni association ; une autre charge avec la même clé donne `409`. | Tests d’application, d’infrastructure et d’API ; cas attendu de rejeu. |
+| Q8 | slice-service s’arrête pendant des activations. | Au redémarrage, les demandes `RECUE` sont reprises et terminées, sans association en double. | Tests du domaine et de l’application (reprise) ; test d’infrastructure (liste des demandes à reprendre). |
+| Q9 | 600 op/s pendant 5 min, avec le mélange 60/30/10. | P95 du délai d’activation ≤ 5 s ; moins de 1 % d’erreurs ; file d’activation stable. | Mesure k6 (§10.4). |
+| Q10 | Une opération de l’API change sans que le contrat soit régénéré. | Le build de test échoue. | Tests de dérive des contrats et de la passerelle (§8.4). |
+
+@@ 10.3 Stratégie et résultats des tests
+La stratégie suit l’architecture hexagonale : chaque couche est testée à son niveau, puis le système complet est vérifié par la passerelle.
+
+| Niveau | Outils | Ce qui est vérifié | Tests |
+|---:18|---:22|---:44|---:16|
+| Unitaires : domaine | xUnit | Invariants et transitions (UC-02, UC-04, UC-06) : IMSI, offre figée, état global, demande et service d’inventaire, empreinte. | 80 |
+| Unitaires : application | xUnit, faux ports | Cas d’utilisation avec dépendances simulées : indisponibilités, rejeux simultanés, échecs et délai du réseau, reprise. | 38 |
+| Intégration : infrastructure | Testcontainers (PostgreSQL 16), serveur HTTP simulé | DAO et contraintes SQL, filtrage par client, requête P95, clients HTTP (jeton propagé, `404`, panne), `MockOpen5GSAdapter`. | 45 |
+| Intégration : API REST | WebApplicationFactory, jetons RS256 signés par une clé de test | Codes HTTP, Problem Details, JWT (absent, invalide, autre audience), accès interclient, idempotence, corrélation, dérive du contrat. | 53 |
+| Contrats | Microsoft.OpenApi | Contrat de la passerelle, routes internes non exposées, OAuth2, CORS, exemples. | 11 |
+| Bout en bout | `scripts/tester-cas-attendus.sh` (curl, par la passerelle, système Docker Compose démarré) | Sécurité, isolation, UC-04 puis UC-06, idempotence, erreurs, routes internes, journaux, CORS, pannes, échec à 100 %. | 52 cas |
+
+**Résultats.** `dotnet test CanDroneX.sln` : **227 tests, 227 réussis**, dont 45 avec un vrai PostgreSQL ; `scripts/tester-cas-attendus.sh` : **52 cas sur 52 respectés** (exécution du 2026-10-25, sur le système reconstruit).
+
+| Exigence | Résultat attendu | Résultat constaté |
+|---:16|---:30|---:54|
+| Tests automatisés | Tous les tests requis réussissent. | 227 sur 227 ; 52 cas de bout en bout sur 52. |
+| Accès B2B | `401` sans jeton valide ; accès interclient refusé. | `401` pour les 7 formes de jeton invalide (API et passerelle) ; `404` sur un drone, une commande ou un service d’un autre client ; `422` pour une commande sur son drone ; `X-Client-Id` forgé ignoré. |
+| Activation | Succès et échec du mock sont couverts. | Succès (`ACTIF`, `activatedAt`), refus (`ECHEC_SIMULE`), délai dépassé, erreur d’adaptateur, échec à 100 % de bout en bout ; latence dans les bornes ; aucune association en cas d’échec. |
+| Idempotence | Aucun doublon sur rejeu. | Rejeu, rejeu simultané et clé réutilisée (`409`) testés aux niveaux application, base et API ; une seule association par slice dans le mock ; état jamais en recul. |
+
+**Liens avec les exigences.** Chaque scénario du §10.2 indique ses tests. Le nom de chaque test décrit la règle vérifiée (par exemple `C2_actif_et_imagerie_en_echec_rendent_la_commande_partielle_et_non_echouee`), ce qui sert de traçabilité.
+
+**Limites.** Les tests d’API remplacent les services distants par des faux ; l’intégration réelle entre services est vérifiée par le script de bout en bout, qui exige le système démarré et n’est pas lancé par `dotnet test`. Le mock n’est testé que contre lui-même : la conformité à Open5GS reste à établir en Phase 3. La couverture de code n’est pas mesurée. Il n’y a pas d’intégration continue (projet individuel) : les tests sont lancés avant chaque commit.
+
+@@ 10.4 Mesures de performance
+**Protocole.** `./load-tests/executer-mesure.sh` lance k6 0.54 dans un conteneur du réseau Docker Compose (profil `charge`), dirigé vers la passerelle. Il applique une montée de 0 à 600 op/s en 1 min (`ramping-arrival-rate`), puis 5 min à 600 op/s (`constant-arrival-rate`). Le mélange est de 60 % de consultations (drone, commande, état d’un service), 30 % de commandes C2 + Imagerie (deux activations chacune) et 10 % d’enregistrements de drones, avec un scénario k6 par type. Le jeton (`inspectra-demo`) est obtenu dans `setup()` et renouvelé par chaque VU avant son expiration. Le script échantillonne la file d’activation toutes les 5 s, puis calcule le P95 dès la fin du test avec `p95-delai-activation.sql`, sur les services commandés pendant le plateau. Le centile est discret, et un service non actif compte comme dépassant 5 s. Chaque mesure de référence part d’un système neuf (`docker compose down -v`).
+
+**Environnement et mock.** Un seul poste porte tout, générateur compris : Intel Core i5-12450H (8 cœurs, 12 fils), 15,7 Go, Docker Desktop (WSL 2) avec 8 Go et 12 processeurs. Le mock garde les valeurs de l’énoncé : latence uniforme de 300 à 1500 ms, 0 % d’échec, délai d’attente de 5 s.
+
+| Mesure | Cible | Résultat et analyse |
+|---:18|---:16|---:66|
+| Délai d’activation P95 | ≤ 5 s | **1,52 s** (exécution B, 107 994 services, tous actifs) et **1,61 s** (exécution C, 107 806 services) ; P50 de 0,98 à 1,00 s, P99 de 1,64 à 2,71 s ; 100 % des services actifs en moins de 5 s. Le P95 théorique du mock seul est de 1,44 s : la chaîne n’ajoute qu’environ 100 ms. |
+| Débit soutenu | ≥ 600 op/s | **603,0** et **605,7 op/s** sur le plateau (180 912 et 181 711 requêtes), **0 % d’erreurs**. Itérations abandonnées : **5** (0,002 %) et **101** (0,05 %), lors de pics de latence isolés (maximum 1,5 et 3,3 s, P95 HTTP de 190 à 204 ms). |
+| Protocole | 1 min + 5 min | k6 0.54 dans Docker, mélange 60/30/10, mock par défaut ; résultats bruts dans `load-tests/resultats/20261024T172400Z-600ops` (B) et `…173141Z-600ops` (C). |
+| File d’activation | Pas de croissance continue | **Stable** : moyenne 315 et 323, maximum 457 et 566, tendance de +4 et +8 demandes/min. C’est la valeur attendue (360 activations/s × 0,9 s ≈ 325). |
+
+**Écarts et analyse.** Les deux cibles sont atteintes. Le seul écart est le critère « aucune itération abandonnée » de nos seuils k6 : quelques itérations sont abandonnées lors de pics de latence, sans erreur ni service non activé. La cause probable est la saturation du poste : les conteneurs consomment en moyenne 7,8 cœurs sur 12 fils, générateur compris. Toute pause de l’hôte, de WSL 2 ou d’un ramasse-miettes .NET se traduit alors en pic. L’écart entre les exécutions B et C, identiques, le confirme. Cet écart est accepté et documenté.
+
+**Itérations de la campagne.** Les deux premières mesures ont révélé les problèmes corrigés par l’ADR-005 : saturation des connexions PostgreSQL, puis ralentissement de `slice-db` après 4 min (P95 de 3,75 s, file en croissance). Le détail de chaque exécution, avec ses correctifs et ses pistes d’amélioration (générateur sur une autre machine, plusieurs instances de slice-service avec un courtier), est dans `docs/mesures-phase2.md`.
+
+@@ 11. Risques et dette technique
+| Risque / dette | Impact | Mitigation (mesure vérifiable) |
+|---:24|---:34|---:42|
+| Dépendance synchrone : une commande appelle drone-management-service puis slice-service, qui rappelle drone-management-service. | Une lenteur se propage ; la panne de drone-management-service bloque les nouvelles commandes (`503`). | Appels bornés (4 s), disjoncteur, idempotence (en place, cas Q3 et Q4). Phase 3 : demande d’activation par événement (Kafka) ; mesure : commande acceptée avec slice-service arrêté. |
+| Panne partielle : la file d’activation est en mémoire. | Un arrêt brutal perd la file ; une seule instance de slice-service est possible. | Reprise des demandes `RECUE` au démarrage (test Q8). Phase 3 : file partagée (courtier) et plusieurs instances ; mesure : arrêt d’une instance sous charge sans service non activé. |
+| Cohérence à terme : la commande ne connaît l’état d’activation que lorsqu’on la suit. | Un client qui ne suit pas sa commande la voit `EN_COURS` dans la base de service-ordering-service ; tout rapport bâti sur cette base est en retard. | La source de vérité est l’inventaire (UC-07, à jour). Phase 3 : événement « activation terminée » consommé par la commande ; mesure : délai entre `activatedAt` et la mise à jour de l’élément. |
+| Configuration des jetons : émetteur `http://localhost:8081`, clés lues sur `keycloak:8080`, contournement du document de découverte. | Un changement d’hôte ou de port de Keycloak rend tous les jetons invalides (`401` partout). | Paramètres centralisés (`Jwt__*`) ; cas attendus qui vérifient un jeton valide après chaque démarrage. À faire : sonde de santé qui vérifie le JWKS. |
+| Rotation des clés de Keycloak. | Les jetons signés par une nouvelle clé seraient refusés si le JWKS en cache n’était pas relu. | Le gestionnaire de configuration de JwtBearer relit le JWKS dès qu’un jeton porte une clé inconnue, et au plus tard toutes les 12 h ; à vérifier par un test de rotation en Phase 3. |
+| Dérive des contrats. | Un client intègre une API différente de celle documentée. | Contrats générés depuis le code et tests de dérive, d’exemples et de passerelle (§8.4) : le build de test échoue. |
+| KrakenD CE répond `500` sans corps quand un service est injoignable. | Le client ne distingue pas une panne d’une erreur. | Limite documentée (ADR-003) et vérifiée par les cas attendus ; à réévaluer si une passerelle avec corps d’erreur devient nécessaire. |
+| Dette : schéma créé par `init.sql`, sans migrations versionnées. | Impossible de faire évoluer une base déjà peuplée sans intervention manuelle. | Phase 3 : outil de migration (DbUp ou Flyway) ; mesure : mise à niveau d’une base de Phase 2 sans perte. |
+| Dette : code transversal copié dans trois services (sécurité, corrélation, erreurs, contrats). | Une correction doit être faite trois fois ; c’est arrivé pour la propagation de la corrélation. | Fichiers identiques d’un service à l’autre (comparables par `diff`) ; à transformer en paquet NuGet interne si un quatrième service apparaît. |
+| Dette : l’IMSI est dupliquée dans `slice-db`, et le mock garde ses associations en mémoire. | Plus de renseignements personnels à protéger ; associations perdues au redémarrage du mock. | IMSI jamais exposée ni journalisée (tests) ; le vrai adaptateur devra assurer l’idempotence côté réseau (ADR-002). |
+| Mesure faite sur un seul poste saturé. | Les pics de latence (itérations abandonnées) peuvent venir du poste plutôt que du système. | Rejouer la mesure avec k6 sur une autre machine (`executer-mesure.sh`, cible `GW`). |
+
+@@ 12.1 Langage métier
+| Terme | Définition |
+|---:22|---:78|
+| Client B2B | Entreprise cliente (exploitant de drones) qui utilise l’API de CanDroneX par son application ; identifiée par son client applicatif Keycloak (claim `azp`). |
+| Drone | Aéronef enregistré par un client : `droneId` technique, identifiant métier unique pour ce client (ex. DRN-0231), identité réseau, modèle et statut. |
+| Identité réseau | IMSI et type de carte (SIM ou eSIM) du drone ; renseignement personnel, jamais exposé par l’API publique. |
+| Offre (spécification de service) | Entrée du catalogue (`C2_URLLC`, `IMAGERIE_EMBB`) décrite par ses caractéristiques réseau et de service, avec une version. |
+| Commande | Demande d’un client composée d’éléments ; identifiée par le client et sa clé d’idempotence ; état global calculé. |
+| Élément de commande | Un service demandé pour un drone (action `AJOUTER`), avec l’offre figée au moment de la commande et son propre état. |
+| Service de connectivité | Service actif ou à activer pour un drone : C2 / URLLC (commande et contrôle) ou Imagerie / eMBB (vidéo de mission) ; tenu dans l’inventaire. |
+| Slice | Tranche logique du réseau 5G identifiée par un S-NSSAI, qui fournit à un service de connectivité ses garanties de latence, de fiabilité ou de débit. |
+| Activation | Configuration de la slice d’un service sur le profil d’abonné du drone ; suivie par une demande d’activation (`RECUE`, `REUSSIE`, `ECHOUEE`). |
+| Inventaire | Ensemble des services d’un client tels que CanDroneX les connaît (`EN_ACTIVATION`, `ACTIF`, `EN_ECHEC`), consultable sans interroger le réseau. |
+| `acceptedAt` / `activatedAt` | Instant d’acceptation de la commande / instant où le service devient actif ; leur écart est le délai d’activation mesuré. |
+| Résultat partiel | Commande dont un élément est actif et un autre en échec (`PARTIELLE`). |
+| Clé d’idempotence | Valeur choisie par le client (`Idempotency-Key`) qui fait d’une répétition de sa commande un rejeu sans effet. |
+| Réseau simulé | `MockOpen5GSAdapter` : remplace le cœur 5G en Phase 2, derrière le `NetworkProvisioningPort`. |
+| Identifiant de corrélation | Valeur (`X-Correlation-Id`) qui relie dans les journaux toutes les lignes d’une même requête, dans tous les services. |
+
+@@ 12.2 Acronymes
+| Acronyme | Signification |
+|---:16|---:84|
+| 5QI | 5G QoS Identifier : classe de qualité de service d’un flux 5G. |
+| ADR | Architecture Decision Record. |
+| API | Application Programming Interface. |
+| B2B | Business to Business. |
+| C2 | Command and Control : commande et contrôle du drone. |
+| CORS | Cross-Origin Resource Sharing. |
+| DAO | Data Access Object. |
+| DNN | Data Network Name : réseau de données joint par la session (ex. `c2.candronex`). |
+| DTO | Data Transfer Object. |
+| eMBB | enhanced Mobile Broadband : slice à haut débit. |
+| IMSI | International Mobile Subscriber Identity. |
+| JSON / JSONB | JavaScript Object Notation / format JSON binaire de PostgreSQL. |
+| JWKS | JSON Web Key Set : clés publiques de signature publiées par Keycloak. |
+| JWT | JSON Web Token. |
+| ORM | Object-Relational Mapping. |
+| P95, P99 | 95e et 99e centiles d’une distribution. |
+| REST | Representational State Transfer. |
+| RFC 9457 | Problem Details for HTTP APIs : format commun des erreurs. |
+| RS256 | Signature RSA avec SHA-256. |
+| S-NSSAI (SST, SD) | Single Network Slice Selection Assistance Information : identifiant d’une slice, formé du Slice/Service Type et du Slice Differentiator. |
+| SIM / eSIM | Subscriber Identity Module, physique ou intégré. |
+| TMF | TM Forum : organisme dont les API ouvertes (TMF633, 638, 640, 641) inspirent les routes. |
+| UC | Use Case : cas d’utilisation. |
+| URLLC | Ultra-Reliable Low-Latency Communications : slice à faible latence et haute fiabilité. |
+| UUID | Universally Unique Identifier. |
+| VU | Virtual User : utilisateur virtuel de k6. |
+
+@@ Annexe A — Contrats OpenAPI
+Les contrats sont dans `docs/openapi/` (OpenAPI 3.0, version d’API `v1`), générés depuis le code et vérifiés par des tests (§8.4). Une fois le système démarré, ils sont servis par Swagger UI sur `http://localhost:8082` : la liste en haut de page passe d’un contrat à l’autre. Chacun décrit, pour chaque opération, les paramètres, les schémas JSON, les codes de réponse, les erreurs Problem Details et des exemples.
+
+| Contrat | Opérations | Sécurité |
+|---:34|---:44|---:22|
+| `api-gateway.yaml` (contrat exposé) | 9 opérations publiques : drones (3), catalogue (2), commandes (2), inventaire (2). | `oauth2` `clientCredentials` (`tokenUrl` du Keycloak fourni) et `bearer`. |
+| `drone-management-service.yaml` | 4 opérations, dont la route interne `identiteReseau`. | `bearer` |
+| `service-ordering-service.yaml` | 4 opérations : catalogue (2), commandes (2). | `bearer` |
+| `slice-service.yaml` | 4 opérations : activation interne (2), inventaire (2). | `bearer` |
+
+**Correspondance entre opérations, cas d’utilisation et tests.**
+
+| Opération | UC | Tests de contrat et d’intégration |
+|---:36|---:10|---:54|
+| `POST /api/drone-management/v1/drone` | UC-02 | `Enregistrer_un_drone_retourne_201_avec_location_et_sans_imsi`, `Imsi_deja_utilisee_retourne_409`, `Requete_mal_formee_retourne_400…` ; cas attendus d’enregistrement. |
+| `GET …/drone`, `GET …/drone/{droneId}` | UC-02 | `Lister_ne_retourne_que_les_drones_du_client_authentifie`, `Consulter_le_drone_d_un_autre_client_retourne_404…`, `X_Client_Id_forge_est_ignore…`. |
+| `GET …/drone/{droneId}/identiteReseau` (interne) | UC-06 | `Resoudre_l_identite_reseau_retourne_l_imsi_au_proprietaire_seulement`, `L_imsi_est_resolue_par_la_route_interne_avec_le_jeton_du_client` ; cas « route interne non exposée ». |
+| `GET /api/service-catalog/v1/serviceSpecification[/{id}]` | UC-04 | `Le_catalogue_liste_les_offres_avec_leurs_caracteristiques`, `Consulter_une_offre_inexistante_retourne_404`. |
+| `POST /api/service-ordering/v1/serviceOrder` | UC-04 | `Commander_retourne_201…`, `Rejouer_la_meme_demande_retourne_200…`, `Reutiliser_une_cle_pour_un_autre_contenu_retourne_409`, `Commander_pour_un_drone_inconnu_retourne_422`, `Commander_quand_le_registre_des_drones_est_indisponible_retourne_503`. |
+| `GET …/serviceOrder/{commandeId}` | UC-04, UC-06 | `Suivre_sa_commande_retourne_200`, `Suivre_la_commande_d_un_autre_client_retourne_404…` ; cas UC-04 puis UC-06 jusqu’à `COMPLETEE`, `PARTIELLE` ou `ECHOUEE`. |
+| `POST /api/service-activation/v1/activation` (interne) | UC-06 | `Une_demande_est_acceptee_en_202_puis_le_service_devient_actif`, `Redemander_le_meme_element_retourne_200…sans_seconde_association`, `Avec_un_taux_d_echec_de_100_pourcent…`. |
+| `GET …/activation?elementId=…` (interne) | UC-06 | `Le_suivi_d_un_autre_client_ne_retourne_rien`, `Le_suivi_sans_element_est_refuse_en_400`. |
+| `GET /api/service-inventory/v1/service[/{id}]` | UC-07 | `Le_service_d_un_autre_client_est_introuvable_dans_l_inventaire`, `L_inventaire_et_le_suivi_sont_filtres_par_client`. |
+| Toutes | — | `Le_contrat_publie_correspond_a_l_api_exposee` (×3), `Le_contrat_de_la_passerelle_correspond…`, `Chaque_requete_et_chaque_reponse_documentee_a_un_exemple` (×4), `Le_contrat_declare_le_flux_oauth2_client_credentials…`. |
+
+@@ Annexe B — Persistance
+Chaque service possède une base PostgreSQL 16, dans son conteneur et son volume. Le §8.1 décrit les contraintes et la cohérence entre services ; cette annexe donne le modèle logique.
+
+| Service et base | Table | Colonnes principales | Références vers d’autres services |
+|---:20|---:22|---:38|---:20|
+| drone-management-service, `drone-db` | `drones.drone` | `id`, `client_id`, `identifiant_metier`, `imsi`, `type_carte`, `modele`, `statut`, `date_enregistrement` | — |
+| service-ordering-service, `ordering-db` | `catalogue.specification_service` | `id`, `nom`, `description`, `version` | — |
+| | `catalogue.caracteristique_specification` | `specification_id` (clé étrangère), `nom`, `valeur`, `ordre` | — |
+| | `commandes.commande` | `id`, `client_id`, `cle_idempotence`, `empreinte`, `accepted_at` | — |
+| | `commandes.element_commande` | `id`, `commande_id` (clé étrangère), `drone_id`, `action`, `specification_id`, `specification_version`, `caracteristiques` (JSONB), `etat`, `cause_echec`, `service_id`, `activated_at` | `drone_id` (drone-management), `service_id` (slice-service) |
+| slice-service, `slice-db` | `activation.demande_activation` | `id`, `element_id`, `commande_id`, `client_id`, `drone_id`, `imsi`, offre figée, `etat`, `cause`, `accepted_at`, `recue_at`, `terminee_at`, `correlation_id` | `element_id`, `commande_id` (ordering), `drone_id` (drone-management) |
+| | `inventaire.service` | `id`, `element_id`, `commande_id`, `client_id`, `drone_id`, `specification_id`, `caracteristiques`, `etat`, `cause_echec`, `activated_at` | mêmes identifiants |
+
+Les références vers d’autres services sont de simples identifiants, sans clé étrangère, validés par API au moment de l’écriture.
+
+**Initialisation.** `services/<service>/db/init.sql` est monté dans `/docker-entrypoint-initdb.d/` et exécuté au premier démarrage d’un volume vide. Il crée les schémas, les tables, les contraintes, les index (par client, demandes non terminées, `accepted_at` pour la mesure) et la fonction `commandes.rang_etat`, puis charge les données de démonstration. Il n’y a pas de migrations en Phase 2 (§11).
+
+**Données de démonstration et remise à zéro.** Les données de démonstration sont décrites au §8.1. Pour repartir de zéro, `docker compose down -v` supprime les trois volumes, et `docker compose up -d` recrée les bases et recharge les données. La requête de mesure `p95-delai-activation.sql` est montée dans `slice-db` (`/mesures`).
+
+@@ Annexe C — Conteneurisation et exécution
+Prérequis : Docker Desktop (Compose v2), Git Bash ou un shell POSIX avec `curl` et `python3` ; le SDK .NET 8 seulement pour lancer les tests. Le README du dépôt reprend ces commandes.
+
+| Besoin | Commande |
+|---:28|---:72|
+| Configurer | `cp .env.example .env`, puis remplacer chaque valeur (secrets des clients de démonstration, mots de passe des bases). |
+| Démarrer | `docker compose up --build -d`, puis `docker compose ps` jusqu’à ce que `keycloak` soit `healthy` ; le realm `candronex` est importé automatiquement. |
+| Arrêter | `docker compose down` (données conservées). |
+| Réinitialiser les données | `docker compose down -v`, puis `docker compose up -d`. |
+| Obtenir un JWT et appeler la passerelle | Commandes du §7.2 : `POST` client credentials sur `http://localhost:8081/realms/candronex/protocol/openid-connect/token`, puis `Authorization: Bearer` sur `http://localhost:8080/api/…`. |
+| Consulter les journaux | `docker compose logs -f drone-management-service service-ordering-service slice-service` ; parcours d’une commande : filtrer sur `"commandeId":"<id>"` (§8.6). |
+| Exécuter UC-06 de bout en bout | `./scripts/demo-bout-en-bout.sh` : jeton, drone, commande C2 + Imagerie, attente des services actifs, inventaire et journaux. |
+| Démontrer l’échec | `MOCK_TAUX_ECHEC=1 docker compose up -d slice-service`, relancer la démonstration, puis `docker compose up -d slice-service`. |
+| Lancer les tests | `dotnet test CanDroneX.sln` (Docker requis pour Testcontainers) ; `./scripts/tester-cas-attendus.sh` sur le système démarré. |
+| Régénérer les contrats | `./scripts/exporter-contrats.sh`. |
+| Reproduire les mesures | `docker compose down -v && docker compose up --build -d`, puis `./load-tests/executer-mesure.sh` (environ 7 min) ; résultats et `analyse.md` dans `load-tests/resultats/<exécution>/`. |
+
+Seuls la passerelle (`GATEWAY_PORT`, 8080 par défaut), Keycloak (8081) et Swagger UI (8082) sont publiés sur l’hôte. Les images des services sont construites depuis la racine du dépôt par `services/<service>/Dockerfile`, en deux étapes : SDK .NET 8 pour la compilation, puis ASP.NET Core 8 pour l’exécution.
+
+@@ Annexe D — Auto-évaluation
+| # | Critère d’évaluation Phase 2 | Auto-évaluation | Éléments justificatifs | Écarts / limites |
+|---:4|---:18|---:12|---:38|---:28|
+| 1 | Analyse du domaine et UC-06 | Atteint | §1.2, §3.1, §3.3, §6.2, §12 ; cartographie mise à jour selon la Phase 1 (Service Activation et Service Inventory séparés). | UC-10 et UC-15 modélisés, mais déclenchés en Phase 3. |
+| 2 | Architecture microservices | Atteint | §4.1, §4.2, §5.1, §7.1, §8.1, ADR-001 ; trois services, une base par service, dépendances sans cycle. | File d’activation en mémoire : une seule instance de slice-service (§11). |
+| 3 | API Gateway et sécurité B2B | Atteint, avec une limite | §4.4, §8.5, ADR-003 ; `krakend/krakend.json`, `Securite/` de chaque service ; 52 cas attendus. | `500` sans corps de KrakenD CE quand un service est injoignable (documenté). |
+| 4 | Architecture hexagonale et API | Atteint | §4.3, §5.2, §5.3, §8.4, annexe A ; domaine sans dépendance ; contrats générés, avec exemples, vérifiés par tests. | Code transversal copié dans chaque service (choix assumé). |
+| 5 | UC-06 et réseau simulé | Atteint | §5.2, §6.1, §6.2, §8.2, ADR-002 ; `MockOpen5GSAdapter` paramétrable ; succès, échec, délai et reprise testés. | Associations du mock en mémoire. |
+| 6 | Documentation et ADR | Atteint | Chapitres 1 à 9, ADR-001 à ADR-005, diagrammes avec légende ; `docs/decisions-phase2.md`. | — |
+| 7 | Mesure de la performance | Atteint, avec un écart | §10.4, `docs/mesures-phase2.md`, `load-tests/` ; P95 de 1,52 à 1,61 s, de 603 à 606 op/s, 0 % d’erreurs. | 5 à 101 itérations abandonnées (0,002 à 0,05 %), attribuées à la saturation du poste. |
+| 8 | Tests | Atteint | §10.3 ; 227 tests automatisés, dont 45 sur PostgreSQL ; 52 cas de bout en bout. | Couverture non mesurée ; pas d’intégration continue. |
+| 9 | Conteneurisation, logs et livraison | Atteint | §7, §8.6, annexe C ; `docker compose up` sans configuration manuelle ; journaux JSON corrélés ; README. | Mesures sur un seul poste. |
