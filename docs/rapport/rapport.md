@@ -3,11 +3,11 @@ voir generer_rapport.py. Génération : python docs/rapport/generer_rapport.py
 
 @@ page de titre
 Équipe / N° d’équipe : Projet individuel
-Membres (nom, code permanent) : Martin SIMON
+Membres (nom, code permanent) : Martin SIMON (SIMM67290101)
 Cours / Groupe : LOG430 — Groupe 02
 Session : Automne 2026
-Date de remise : [à compléter — voir Moodle]
-Version du document : v1.0
+Date de remise : 1er novembre 2026
+Version du document : v1.0 — 1er novembre 2026
 
 @@ Sommaire
 [[SOMMAIRE]]
