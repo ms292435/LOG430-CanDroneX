@@ -278,6 +278,12 @@ def texte(element):
 def remplir_page_de_titre(document, lignes):
     valeurs = dict(l.split(":", 1) for l in lignes if ":" in l)
     valeurs = {normaliser(k): v.strip() for k, v in valeurs.items()}
+    # En-tête du gabarit (« À compléter ») : une fois rempli, la colonne contient les valeurs.
+    entete = document.tables[0].rows[0].cells[1].paragraphs[0]
+    if entete.runs:
+        for run in entete.runs[1:]:
+            run._r.getparent().remove(run._r)
+        entete.runs[0].text = "Valeur"
     for rangee in document.tables[0].rows:
         cle = normaliser(rangee.cells[0].text)
         if cle in valeurs:
