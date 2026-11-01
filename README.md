@@ -2,7 +2,7 @@
 
 Plateforme B2B de slices réseau 5G pour drones (LOG430, ETS, automne 2026). La Phase 2 fait évoluer le monolithe modulaire de la Phase 1 (branche `phase1`) vers des microservices exposés par une API Gateway et protégés par le Keycloak fourni.
 
-> État : Phase 2 livrée (branche `phase2`). UC-02, UC-04 et UC-06 fonctionnent de bout en bout dans trois microservices derrière la passerelle ; 227 tests automatisés et 52 cas attendus réussis ; mesure à 600 op/s dans [docs/mesures-phase2.md](docs/mesures-phase2.md). Le rapport est produit depuis [docs/rapport/rapport.md](docs/rapport/rapport.md) (`python docs/rapport/generer_rapport.py`) ; les décisions sont consignées dans [docs/decisions-phase2.md](docs/decisions-phase2.md).
+> État : Phase 2 livrée (branche `phase2`). UC-02, UC-04 et UC-06 fonctionnent de bout en bout dans trois microservices derrière la passerelle ; 227 tests automatisés et 52 cas attendus réussis ; mesure à 600 op/s dans [load-tests/resultats](load-tests/resultats). L'architecture, les décisions (ADR) et l'analyse des mesures sont dans le rapport de la Phase 2, remis séparément.
 
 ## Architecture
 
