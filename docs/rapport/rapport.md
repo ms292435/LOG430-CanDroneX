@@ -797,7 +797,7 @@ Les ADR ci-dessous formalisent les décisions structurantes de la Phase 2. Leur 
 | Statut | Accepté (2026-10-24), à la suite de la campagne de mesure (§10.4). |
 | Contexte | La première mesure complète à 600 op/s n’a pas tenu. Avec un pool de 200 connexions, slice-service dépassait les 100 connexions de PostgreSQL : erreurs « too many clients », disjoncteur ouvert, éléments bloqués en attente. Une fois le pool corrigé, `slice-db` ralentissait après 4 minutes : file en croissance et P95 de 3,75 s. Chaque activation faisait trois écritures (réception, passage à `EN_COURS`, résultat) sur une base devenue plus grande que son cache. |
 | Décision | Limiter chaque service à 80 connexions (`Maximum Pool Size=80`) : sous charge, une requête attend une connexion libre au lieu d’échouer. Ne plus persister `EN_COURS` : la demande n’y passe qu’en mémoire, quand le processeur la prend dans la file, ce qui laisse deux écritures par activation et aucune avant l’appel réseau. Régler PostgreSQL pour `slice-db` et `ordering-db` : `shared_buffers` 512 Mo, `max_wal_size` 4 Go, `checkpoint_timeout` 15 min. |
-| Conséquences | (+) 603 à 606 op/s sans erreur, file stable et P95 de 1,5 à 1,6 s (exécutions B et C). (+) La reprise au démarrage est plus simple : toute demande `RECUE` est à rejouer, et la configuration idempotente rend le rejeu sûr même si l’appel avait déjà eu lieu. (−) Pendant une activation, l’API montre `RECUE` plutôt que `EN_COURS` ; c’est sans effet pour le client, qui suit l’état de l’élément `EN_ACTIVATION`. (−) Les réglages PostgreSQL visent ce poste de mesure ; il faudra les revoir pour un autre environnement. |
+| Conséquences | (+) 606 op/s sans erreur ni itération abandonnée, file stable et P95 de 1,515 s (exécution D, §10.4) ; résultats concordants avec les exécutions B et C. (+) La reprise au démarrage est plus simple : toute demande `RECUE` est à rejouer, et la configuration idempotente rend le rejeu sûr même si l’appel avait déjà eu lieu. (−) Pendant une activation, l’API montre `RECUE` plutôt que `EN_COURS` ; c’est sans effet pour le client, qui suit l’état de l’élément `EN_ACTIVATION`. (−) Les réglages PostgreSQL visent ce poste de mesure ; il faudra les revoir pour un autre environnement. |
 | Options écartées | **Augmenter max_connections de PostgreSQL** : déplace le problème (plus de mémoire, plus de contention) sans borner la charge. **Garder EN_COURS et regrouper les écritures par lots** : plus complexe, et le gain est le même. **Ajouter des instances de slice-service** : impossible avec la file en mémoire (ADR-004), et réservé à la Phase 3. |
 | Mise en œuvre | §6.2, §10.4 ; `docker-compose.yml` (chaînes de connexion, `command` des bases), `SliceService.Application/TraitementActivations.cs`, `docs/mesures-phase2.md`. |
 
@@ -806,7 +806,7 @@ Les cinq attributs du §1.3 sont repris ici avec leur preuve. Le délai d’acti
 
 | Attribut de qualité | Motivation | Décision d’architecture | Vérification et résultat |
 |---:14|---:26|---:30|---:30|
-| Performance | P95 de `activatedAt − acceptedAt` ≤ 5 s ; débit ≥ 600 op/s (1 min de montée, 5 min à taux constant). | Activation acceptée puis traitée en arrière-plan (ADR-004) ; pools limités, `EN_COURS` non persisté, bases réglées (ADR-005). | Mesure k6 et requête SQL (§10.4) : P95 de 1,52 à 1,61 s, de 603 à 606 op/s, 0 % d’erreurs ; 5 à 101 itérations abandonnées (écart expliqué). |
+| Performance | P95 de `activatedAt − acceptedAt` ≤ 5 s ; débit ≥ 600 op/s (1 min de montée, 5 min à taux constant). | Activation acceptée puis traitée en arrière-plan (ADR-004) ; pools limités, `EN_COURS` non persisté, bases réglées (ADR-005). | Mesure k6 et requête SQL (§10.4), exécution D : P95 de 1,515 s, 605,9 op/s, 0 % d’erreurs, 0 itération abandonnée ; copies d’écran à l’appui. |
 | Sécurité | Un client B2B n’accède qu’à ses ressources ; l’IMSI est un renseignement personnel. | JWT validé par la passerelle et par chaque service ; client lu dans `azp` ; filtrage par `client_id` ; `404` interclient ; IMSI jamais exposée (ADR-003). | Tests JWT et interclients des trois API ; 52 cas par la passerelle (jetons absents, modifiés, expirés, sans audience ; accès d’`aerotech-demo` aux données d’`inspectra-demo`). |
 | Fiabilité et cohérence | Ni doublon ni état incohérent après une répétition ou une panne ; aucune commande perdue. | Idempotence à quatre niveaux (§8.2) ; transactions locales ; états qui ne reculent pas ; reprise au démarrage. | Tests de rejeu, de rejeu simultané et de lecture concurrente ; cas « rejeu sans doublon » par la passerelle. |
 | Disponibilité | La panne d’un service ne bloque pas tout le parcours. | Appels bornés, une reprise, disjoncteur ; commande acceptée et relancée si slice-service est arrêté (ADR-004). | Cas attendus : drone-management-service arrêté (`503`, rien d’enregistré), slice-service arrêté (`201`, puis `COMPLETEE` à son retour). |
@@ -856,16 +856,30 @@ La stratégie suit l’architecture hexagonale : chaque couche est testée à so
 
 **Environnement et mock.** Un seul poste porte tout, générateur compris : Intel Core i5-12450H (8 cœurs, 12 fils), 15,7 Go, Docker Desktop (WSL 2) avec 8 Go et 12 processeurs. Le mock garde les valeurs de l’énoncé : latence uniforme de 300 à 1500 ms, 0 % d’échec, délai d’attente de 5 s.
 
-| Mesure | Cible | Résultat et analyse |
+| Mesure | Cible | Résultat et analyse (exécution D, référence) |
 |---:18|---:16|---:66|
-| Délai d’activation P95 | ≤ 5 s | **1,52 s** (exécution B, 107 994 services, tous actifs) et **1,61 s** (exécution C, 107 806 services) ; P50 de 0,98 à 1,00 s, P99 de 1,64 à 2,71 s ; 100 % des services actifs en moins de 5 s. Le P95 théorique du mock seul est de 1,44 s : la chaîne n’ajoute qu’environ 100 ms. |
-| Débit soutenu | ≥ 600 op/s | **603,0** et **605,7 op/s** sur le plateau (180 912 et 181 711 requêtes), **0 % d’erreurs**. Itérations abandonnées : **5** (0,002 %) et **101** (0,05 %), lors de pics de latence isolés (maximum 1,5 et 3,3 s, P95 HTTP de 190 à 204 ms). |
-| Protocole | 1 min + 5 min | k6 0.54 dans Docker, mélange 60/30/10, mock par défaut ; résultats bruts dans `load-tests/resultats/20261024T172400Z-600ops` (B) et `…173141Z-600ops` (C). |
-| File d’activation | Pas de croissance continue | **Stable** : moyenne 315 et 323, maximum 457 et 566, tendance de +4 et +8 demandes/min. C’est la valeur attendue (360 activations/s × 0,9 s ≈ 325). |
+| Délai d’activation P95 | ≤ 5 s | **1,515 s** sur le plateau, pour 107 984 services, tous actifs (1,511 s sur le test complet, 118 776 services) ; P50 de 0,975 s, P99 de 1,649 s ; 100 % des services actifs en moins de 5 s. Le P95 théorique du mock seul est de 1,44 s : le reste de la chaîne n’ajoute qu’environ 75 ms. |
+| Débit soutenu | ≥ 600 op/s | **605,9 op/s** sur le plateau (181 779 requêtes en 300 s), **0 % d’erreurs** (0 requête en échec sur 199 839, montée comprise), **0 itération abandonnée**. |
+| Protocole | 1 min + 5 min | k6 0.54 dans Docker, mélange 60/30/10, mock par défaut, système neuf ; exécution du 2026-11-01, résultats bruts dans `load-tests/resultats/20261101T143055Z-600ops/`. |
+| File d’activation | Pas de croissance continue | **Stable** : moyenne 318, maximum 382, tendance de −0,9 demande/min sur le plateau. C’est la valeur attendue (360 activations/s × 0,9 s de latence moyenne ≈ 325). |
 
-**Écarts et analyse.** Les deux cibles sont atteintes. Le seul écart est le critère « aucune itération abandonnée » de nos seuils k6 : quelques itérations sont abandonnées lors de pics de latence, sans erreur ni service non activé. La cause probable est la saturation du poste : les conteneurs consomment en moyenne 7,8 cœurs sur 12 fils, générateur compris. Toute pause de l’hôte, de WSL 2 ou d’un ramasse-miettes .NET se traduit alors en pic. L’écart entre les exécutions B et C, identiques, le confirme. Cet écart est accepté et documenté.
+Les copies d’écran ci-dessous sont celles de l’exécution D, prises à la fin du test.
 
-**Itérations de la campagne.** Les deux premières mesures ont révélé les problèmes corrigés par l’ADR-005 : saturation des connexions PostgreSQL, puis ralentissement de `slice-db` après 4 min (P95 de 3,75 s, file en croissance). Le détail de chaque exécution, avec ses correctifs et ses pistes d’amélioration (générateur sur une autre machine, plusieurs instances de slice-service avec un courtier), est dans `docs/mesures-phase2.md`.
+![Exécution D : résultats par rapport aux cibles, produits par analyser-resultats.py à la fin du test](captures/mesure-d-resultats.png)
+
+![Exécution D : P95 du délai d’activation calculé dans slice-db par p95-delai-activation.sql, sur tout le test](captures/mesure-d-p95-sql.png)
+
+![Exécution D : résumé k6 (resume-k6.json) ; à gauche, aucune itération abandonnée ; à droite, aucune requête en échec sur 199 839](captures/mesure-d-resume-k6.png)
+
+> Dans le résumé k6, `http_reqs` affiche 549 requêtes/s : c’est la moyenne sur les 6 minutes, montée comprise. La cible porte sur le plateau, où le débit est de 605,9 op/s. De même, pour la métrique `http_req_failed`, k6 compte comme « passes » les requêtes pour lesquelles la condition « en échec » est vraie : 0 passe signifie 0 requête en échec.
+
+![File d’activation de slice-service pendant l’exécution D : montée en 1 min, puis stabilité autour de la valeur attendue](captures/mesure-d-file-activation.png)
+
+**Écarts et analyse.** Les deux cibles sont atteintes, ainsi que nos critères de seuil k6 (aucune itération abandonnée, moins de 1 % d’erreurs). Le délai d’activation est dominé par la latence simulée du réseau : la chaîne CanDroneX ajoute environ 75 ms au P95 du mock seul. Les conteneurs consomment en moyenne environ 7,6 cœurs sur les 12 fils du poste, générateur compris (`slice-db` 144 %, `slice-service` 131 %, `service-ordering-service` 104 %, `ordering-db` 102 %).
+
+**Reproductibilité et exécutions antérieures.** Deux exécutions complètes du 2026-10-24, avec le même protocole, avaient donné 603,0 et 605,7 op/s, 0 % d’erreurs et un P95 de 1,52 et 1,61 s (exécutions B et C). Elles avaient toutefois 5 et 101 itérations abandonnées lors de pics de latence isolés, attribués à la saturation du poste. L’exécution D, faite sur un poste moins chargé, n’en a aucune. Les trois exécutions donnent des résultats concordants pour le débit et le délai d’activation.
+
+**Itérations de la campagne.** Les premières mesures ont révélé les problèmes corrigés par l’ADR-005 : saturation des connexions PostgreSQL, puis ralentissement de `slice-db` après 4 min (P95 de 3,75 s, file en croissance). Le détail de chaque exécution, avec ses correctifs et ses pistes d’amélioration (générateur sur une autre machine, plusieurs instances de slice-service avec un courtier), est dans `docs/mesures-phase2.md`.
 
 @@ 11. Risques et dette technique
 | Risque / dette | Impact | Mitigation (mesure vérifiable) |
@@ -880,7 +894,7 @@ La stratégie suit l’architecture hexagonale : chaque couche est testée à so
 | Dette : schéma créé par `init.sql`, sans migrations versionnées. | Impossible de faire évoluer une base déjà peuplée sans intervention manuelle. | Phase 3 : outil de migration (DbUp ou Flyway) ; mesure : mise à niveau d’une base de Phase 2 sans perte. |
 | Dette : code transversal copié dans trois services (sécurité, corrélation, erreurs, contrats). | Une correction doit être faite trois fois ; c’est arrivé pour la propagation de la corrélation. | Fichiers identiques d’un service à l’autre (comparables par `diff`) ; à transformer en paquet NuGet interne si un quatrième service apparaît. |
 | Dette : l’IMSI est dupliquée dans `slice-db`, et le mock garde ses associations en mémoire. | Plus de renseignements personnels à protéger ; associations perdues au redémarrage du mock. | IMSI jamais exposée ni journalisée (tests) ; le vrai adaptateur devra assurer l’idempotence côté réseau (ADR-002). |
-| Mesure faite sur un seul poste saturé. | Les pics de latence (itérations abandonnées) peuvent venir du poste plutôt que du système. | Rejouer la mesure avec k6 sur une autre machine (`executer-mesure.sh`, cible `GW`). |
+| Mesure faite sur un seul poste, générateur compris. | Le poste est très chargé (environ 7,6 cœurs sur 12 fils) : deux exécutions sur trois ont eu quelques itérations abandonnées lors de pics de latence qui peuvent venir du poste plutôt que du système. | Rejouer la mesure avec k6 sur une autre machine (`executer-mesure.sh`, cible `GW`). |
 
 @@ 12.1 Langage métier
 | Terme | Définition |
@@ -1003,6 +1017,6 @@ Seuls la passerelle (`GATEWAY_PORT`, 8080 par défaut), Keycloak (8081) et Swagg
 | 4 | Architecture hexagonale et API | Atteint | §4.3, §5.2, §5.3, §8.4, annexe A ; domaine sans dépendance ; contrats générés, avec exemples, vérifiés par tests. | Code transversal copié dans chaque service (choix assumé). |
 | 5 | UC-06 et réseau simulé | Atteint | §5.2, §6.1, §6.2, §8.2, ADR-002 ; `MockOpen5GSAdapter` paramétrable ; succès, échec, délai et reprise testés. | Associations du mock en mémoire. |
 | 6 | Documentation et ADR | Atteint | Chapitres 1 à 9, ADR-001 à ADR-005, diagrammes avec légende ; `docs/decisions-phase2.md`. | — |
-| 7 | Mesure de la performance | Atteint, avec un écart | §10.4, `docs/mesures-phase2.md`, `load-tests/` ; P95 de 1,52 à 1,61 s, de 603 à 606 op/s, 0 % d’erreurs. | 5 à 101 itérations abandonnées (0,002 à 0,05 %), attribuées à la saturation du poste. |
+| 7 | Mesure de la performance | Atteint | §10.4 (copies d’écran et graphique de la file), `docs/mesures-phase2.md`, `load-tests/resultats/20261101T143055Z-600ops/` ; P95 de 1,515 s, 605,9 op/s, 0 % d’erreurs, 0 itération abandonnée. | Mesure sur un seul poste ; les exécutions B et C avaient 5 et 101 itérations abandonnées. |
 | 8 | Tests | Atteint | §10.3 ; 227 tests automatisés, dont 45 sur PostgreSQL ; 52 cas de bout en bout. | Couverture non mesurée ; pas d’intégration continue. |
 | 9 | Conteneurisation, logs et livraison | Atteint | §7, §8.6, annexe C ; `docker compose up` sans configuration manuelle ; journaux JSON corrélés ; README. | Mesures sur un seul poste. |

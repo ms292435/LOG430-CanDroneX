@@ -25,6 +25,7 @@ import docx
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
 from docx.shared import Cm, Pt
+from PIL import Image
 
 ICI = Path(__file__).resolve().parent
 GABARIT = ICI / "gabarit-phase2.docx"
@@ -171,7 +172,11 @@ class Redacteur:
         paragraphe = self.doc.add_paragraph()
         paragraphe.alignment = 1
         paragraphe.paragraph_format.keep_with_next = True
-        paragraphe.add_run().add_picture(str((ICI / chemin).resolve()), width=LARGEUR_IMAGE)
+        fichier = (ICI / chemin).resolve()
+        # Une copie d'écran étroite garde sa taille naturelle (environ 110 ppp) au lieu d'être étirée et floue.
+        with Image.open(fichier) as source:
+            largeur = min(LARGEUR_IMAGE, Cm(source.width / 110 * 2.54))
+        paragraphe.add_run().add_picture(str(fichier), width=largeur)
         element = paragraphe._p
         element.getparent().remove(element)
         return [element, self.paragraphe(f"Figure {self.figures} — {legende}", apres=160, couleur="595959",

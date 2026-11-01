@@ -27,18 +27,20 @@ Un seul poste porte tout : la passerelle, Keycloak, les trois microservices, leu
 
 ## Résultats de référence (5 min à 600 op/s)
 
-| Mesure | Cible | Exécution B (`20261024T172400Z`) | Exécution C (`20261024T173141Z`) |
-|---|---|---|---|
-| Débit soutenu (plateau) | ≥ 600 op/s | **603,0 op/s** (180 912 requêtes) | **605,7 op/s** (181 711 requêtes) |
-| Taux d'erreur | < 1 % | **0,000 %** | **0,000 %** |
-| Itérations abandonnées | 0 | 5 (0,002 %) | 101 (0,05 %) |
-| File d'activation | pas de croissance continue | **stable** : moyenne 315, max 457, +4 demandes/min | **stable** : moyenne 323, max 566, +8 demandes/min |
-| Délai d'activation P95 | ≤ 5 s | **1,52 s** (107 994 services, tous actifs) | **1,61 s** (107 806 services, tous actifs) |
-| Délai d'activation P50 / P99 | — | 0,98 s / 1,64 s | 1,00 s / 2,71 s |
-| Services activés en moins de 5 s | — | 100 % | 100 % |
-| Latence HTTP P95 / P99 / max | — | 190 ms / 423 ms / 1,5 s | 204 ms / 638 ms / 3,3 s |
+L'exécution D (2026-11-01) est la référence du rapport : c'est la seule à respecter aussi le critère « aucune itération abandonnée ». Les exécutions B et C, faites avec le même protocole, la confirment.
 
-**Analyse.** Le délai d'activation est largement sous la cible : le P95 de 1,5 à 1,6 s est dominé par la latence simulée du réseau (300 à 1500 ms, P95 théorique de 1,44 s), le reste de la chaîne n'ajoutant qu'environ 100 ms. Le débit de 600 op/s est tenu sans aucune erreur et la file d'activation reste stable autour de la valeur attendue (360 activations/s × 0,9 s de latence moyenne ≈ 325 demandes simultanées). Le critère « aucune itération abandonnée » n'est pas atteint au sens strict : quelques itérations (0,002 % à 0,05 %) sont abandonnées par k6 lors de pics de latence isolés (1,5 s et 3,3 s au maximum, P99 sous 650 ms), pendant lesquels un scénario épuise ses VU préalloués. Ces pics ne produisent ni erreur ni service non activé.
+| Mesure | Cible | **Exécution D (`20261101T143055Z`), référence** | Exécution B (`20261024T172400Z`) | Exécution C (`20261024T173141Z`) |
+|---|---|---|---|---|
+| Débit soutenu (plateau) | ≥ 600 op/s | **605,9 op/s** (181 779 requêtes) | **603,0 op/s** (180 912 requêtes) | **605,7 op/s** (181 711 requêtes) |
+| Taux d'erreur | < 1 % | **0,000 %** | **0,000 %** | **0,000 %** |
+| Itérations abandonnées | 0 | **0** | 5 (0,002 %) | 101 (0,05 %) |
+| File d'activation | pas de croissance continue | **stable** : moyenne 318, max 382, −0,9 demande/min | **stable** : moyenne 315, max 457, +4 demandes/min | **stable** : moyenne 323, max 566, +8 demandes/min |
+| Délai d'activation P95 | ≤ 5 s | **1,515 s** (107 984 services, tous actifs) | **1,52 s** (107 994 services, tous actifs) | **1,61 s** (107 806 services, tous actifs) |
+| Délai d'activation P50 / P99 | — | 0,975 s / 1,649 s | 0,98 s / 1,64 s | 1,00 s / 2,71 s |
+| Services activés en moins de 5 s | — | 100 % | 100 % | 100 % |
+| Latence HTTP P95 / P99 / max | — | 174 ms / 398 ms / 1,6 s (montée comprise) | 190 ms / 423 ms / 1,5 s | 204 ms / 638 ms / 3,3 s |
+
+**Analyse.** Le délai d'activation est largement sous la cible : le P95 de 1,5 à 1,6 s (1,515 s pour D) est dominé par la latence simulée du réseau (300 à 1500 ms, P95 théorique de 1,44 s), le reste de la chaîne n'ajoutant qu'environ 100 ms. Le débit de 600 op/s est tenu sans aucune erreur et la file d'activation reste stable autour de la valeur attendue (360 activations/s × 0,9 s de latence moyenne ≈ 325 demandes simultanées). Pour B et C, le critère « aucune itération abandonnée » n'était pas atteint au sens strict : quelques itérations (0,002 % à 0,05 %) étaient abandonnées par k6 lors de pics de latence isolés (1,5 s et 3,3 s au maximum, P99 sous 650 ms), pendant lesquels un scénario épuise ses VU préalloués. Ces pics ne produisent ni erreur ni service non activé. L'exécution D, faite sur un poste moins chargé, n'a abandonné aucune itération.
 
 **Cause probable des pics : la saturation du poste.** En moyenne, les conteneurs consomment environ 7,8 cœurs (exécution B : slice-db 153 %, slice-service 134 %, ordering-db 112 %, service-ordering 105 %, drone-management 94 %, passerelle 74 %, k6 59 %, drone-db 43 %) sur les 12 fils du processeur, générateur de charge compris. Toute pause du système hôte, de WSL 2 ou d'un ramasse-miettes .NET se traduit alors par un pic de latence ; l'écart entre les exécutions B et C, identiques, le confirme.
 
@@ -52,6 +54,7 @@ Un seul poste porte tout : la passerelle, Keycloak, les trois microservices, leu
 | `171202Z` (5 min) | première mesure complète | 141 abandons, file en croissance (+86/min, pic à 1522), P95 3,75 s | Ralentissement de slice-db après 4 min : base (228 Mo) plus grande que le cache par défaut de 128 Mo, checkpoint en cours. Deux correctifs : l'état « en cours » n'est plus persisté (une écriture de moins par activation, aucune avant l'appel réseau) ; `shared_buffers` 512 Mo, `max_wal_size` 4 Go, `checkpoint_timeout` 15 min pour slice-db et ordering-db. |
 | `172400Z` (5 min) — **B** | correctifs appliqués | 5 abandons, file stable, P95 1,52 s | VU préalloués portés à 2 s de latence. |
 | `173141Z` (5 min) — **C** | préallocation doublée | 101 abandons lors d'un pic à 3,3 s, file stable, P95 1,61 s | — (saturation du poste, voir l'analyse) |
+| `20261101T143055Z` (5 min) — **D** | même configuration, système neuf, poste moins chargé | 0 abandon, 0 % d'erreurs, file stable, P95 1,515 s | — (référence du rapport ; copies d'écran dans `docs/rapport/captures/`) |
 
 ## Pistes d'amélioration
 
