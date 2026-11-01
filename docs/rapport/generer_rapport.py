@@ -82,17 +82,16 @@ class Redacteur:
                 morceau, code = morceau[1:-1], True
             elif morceau.startswith("*") and len(morceau) > 2:
                 morceau, i = morceau[1:-1], True
+            # Le code en ligne garde la police du gabarit (Calibri), comme le reste du texte.
             proprietes = ""
-            if code:
-                proprietes += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>'
             if g:
                 proprietes += "<w:b/><w:bCs/>"
             if i:
                 proprietes += "<w:i/><w:iCs/>"
             if couleur:
                 proprietes += f'<w:color w:val="{couleur}"/>'
-            if code or taille:
-                demi_points = int((taille or 9.5) * 2)
+            if taille:
+                demi_points = int(taille * 2)
                 proprietes += f'<w:sz w:val="{demi_points}"/><w:szCs w:val="{demi_points}"/>'
             xml.append(f'<w:r><w:rPr>{proprietes}</w:rPr><w:t xml:space="preserve">{echapper(morceau)}</w:t></w:r>')
         return "".join(xml)
@@ -125,7 +124,7 @@ class Redacteur:
             elements.append(parse_xml(
                 f'<w:p {nsdecls("w")}><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F2F4F7"/>'
                 f'<w:spacing w:before="0" w:after="{apres}" w:line="240" w:lineRule="auto"/><w:ind w:left="120"/></w:pPr>'
-                f'<w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>'
+                f'<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
                 f'<w:t xml:space="preserve">{echapper(ligne) or " "}</w:t></w:r></w:p>'))
         return elements
 

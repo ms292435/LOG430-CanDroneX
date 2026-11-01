@@ -457,12 +457,12 @@ CanDroneX/
 │  │  ├─ src/   DroneManagement.{Domain, Application, Infrastructure, Api}
 │  │  ├─ tests/ DroneManagement.{Domain, Application, Infrastructure, Api}.Tests
 │  │  ├─ db/init.sql, Dockerfile
-│  ├─ service-ordering-service/   (même structure, ServiceOrdering.*)
-│  └─ slice-service/              (même structure, SliceService.*, db/mesures/)
-├─ tests/Contrats.Tests            (assemble le contrat de la passerelle)
-├─ load-tests/                     (k6, analyse, résultats)
-├─ scripts/                        (démonstration, cas attendus, export des contrats)
-└─ docs/                           (openapi/, diagrammes/, rapport/, décisions, mesures)
+│  ├─ service-ordering-service/ — (même structure, ServiceOrdering.*)
+│  └─ slice-service/ — (même structure, SliceService.*, db/mesures/)
+├─ tests/Contrats.Tests — (assemble le contrat de la passerelle)
+├─ load-tests/ — (k6, analyse, résultats)
+├─ scripts/ — (démonstration, cas attendus, export des contrats)
+└─ docs/ — (openapi/, diagrammes/, rapport/, décisions, mesures)
 ```
 
 | Projet | Peut référencer | Contenu |
@@ -583,11 +583,11 @@ Cette vue montre le système exécuté localement avec Docker Compose (`docker-c
 Il suffit d’avoir Docker Desktop et un fichier `.env`. Le realm `candronex` et ses clients sont importés au démarrage de Keycloak : aucune configuration manuelle n’est nécessaire.
 
 ```
-cp .env.example .env              # puis remplacer chaque valeur
-docker compose up --build -d      # construire et démarrer
-docker compose ps                 # attendre que keycloak soit « healthy »
-docker compose down               # arrêter (données conservées)
-docker compose down -v            # arrêter et réinitialiser les bases
+cp .env.example .env   # puis remplacer chaque valeur
+docker compose up --build -d   # construire et démarrer
+docker compose ps   # attendre que keycloak soit « healthy »
+docker compose down   # arrêter (données conservées)
+docker compose down -v   # arrêter et réinitialiser les bases
 ```
 
 **Données de démonstration.** Les scripts `db/init.sql` créent les schémas et chargent, au premier démarrage, le drone DRN-0231 d’`inspectra-demo` (`droneId` `00000000-0000-0000-0000-000000000231`, SIM), le drone AT-0500 d’`aerotech-demo` (eSIM) et les deux offres du catalogue avec leurs sept caractéristiques. `docker compose down -v` efface les volumes : les données de démonstration sont rechargées au démarrage suivant.
